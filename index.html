@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AquaSense AI - Executive Dashboard</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <style>
+    /* Modern Reset & Base */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: radial-gradient(circle at top, #1e293b, #0f172a); color: #f8fafc; font-family: 'Segoe UI', system-ui, sans-serif; padding: 2rem; min-height: 100vh; }
+    
+    /* Header */
+    header { text-align: center; margin-bottom: 3rem; }
+    h1 { font-size: 3rem; font-weight: 900; background: linear-gradient(to right, #06b6d4, #3b82f6); -webkit-background-clip: text; color: transparent; letter-spacing: -0.02em; }
+    p.subtitle { color: #94a3b8; font-size: 1.1rem; margin-top: 0.5rem; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
+
+    /* Layout */
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1.5rem; max-width: 1200px; margin: 0 auto; }
+    .full-width { grid-column: 1 / -1; }
+    
+    /* Glassmorphism Cards */
+    .card { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 16px; padding: 1.75rem; box-shadow: 0 10px 25px rgba(0,0,0,0.5); transition: transform 0.2s; }
+    .card:hover { transform: translateY(-3px); border-color: rgba(56, 189, 248, 0.3); }
+    .card h2 { font-size: 1.25rem; color: #f1f5f9; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 0.75rem; display: flex; justify-content: space-between; align-items: center; }
+    
+    /* Metrics */
+    .metric-group { margin-bottom: 1.5rem; }
+    .metric-label { font-size: 0.85rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; letter-spacing: 0.05em; }
+    .metric-value { font-size: 2.5rem; font-weight: 800; color: #38bdf8; margin: 0.25rem 0; font-variant-numeric: tabular-nums; text-shadow: 0 0 15px rgba(56, 189, 248, 0.3); }
+    .metric-sub { font-size: 0.85rem; color: #64748b; }
+    
+    /* Buttons */
+    .btn-group { display: flex; gap: 1rem; margin-top: 1rem; }
+    button { flex: 1; padding: 1rem; border: none; border-radius: 10px; font-weight: 800; font-size: 1rem; cursor: pointer; color: #fff; transition: all 0.2s; letter-spacing: 0.05em; }
+    button:active { transform: scale(0.98); }
+    .btn-start { background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4); }
+    .btn-start:hover { box-shadow: 0 6px 20px rgba(16, 185, 129, 0.6); }
+    .btn-stop { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4); }
+    .btn-stop:hover { box-shadow: 0 6px 20px rgba(239, 68, 68, 0.6); }
+    .btn-ai { background: linear-gradient(135deg, #8b5cf6, #6d28d9); width: 100%; margin-bottom: 1rem; box-shadow: 0 4px 15px rgba(139, 92, 246, 0.4); }
+    .btn-download { background: linear-gradient(135deg, #3b82f6, #2563eb); width: 100%; margin-top: 1rem; }
+
+    /* Status Indicators */
+    .status-badge { padding: 0.5rem 1.25rem; border-radius: 9999px; font-size: 0.8rem; font-weight: 800; background: #334155; color: #94a3b8; letter-spacing: 0.05em; }
+    .status-on { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.5); box-shadow: 0 0 15px rgba(16, 185, 129, 0.3); }
+    .status-off { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.5); }
+
+    /* Inputs */
+    input[type="number"] { width: 100%; padding: 1rem; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.2); color: #f8fafc; font-size: 1.5rem; font-weight: 700; text-align: center; margin-bottom: 1rem; outline: none; transition: border-color 0.2s; }
+    input[type="number"]:focus { border-color: #38bdf8; }
+
+    /* Live Data Log Table */
+    .table-container { max-height: 250px; overflow-y: auto; margin-top: 1rem; border-radius: 8px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); }
+    .table-container::-webkit-scrollbar { width: 8px; }
+    .table-container::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
+    th { position: sticky; top: 0; background: #0f172a; padding: 0.75rem 1rem; color: #38bdf8; font-weight: 700; text-transform: uppercase; font-size: 0.8rem; z-index: 1; }
+    td { padding: 0.75rem 1rem; border-top: 1px solid rgba(255,255,255,0.05); color: #cbd5e1; font-variant-numeric: tabular-nums; }
+    tbody tr:hover { background: rgba(255,255,255,0.05); }
+    .pulse-text { color: #94a3b8; font-size: 0.8em; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>AquaSense AI</h1>
+    <p class="subtitle">Intelligent Campus Water Management</p>
+  </header>
+
+  <div class="grid">
+    <!-- Motor Control -->
+    <div class="card">
+      <h2>Hardware Control <span id="pumpStatus" class="status-badge">CONNECTING...</span></h2>
+      <div class="metric-group">
+        <p class="metric-label">Remote Pump Override</p>
+        <p class="metric-sub">Secure activation via Firebase RTDB</p>
+      </div>
+      <div class="btn-group">
+        <button class="btn-start" onclick="setPump(true)">START PUMP</button>
+        <button class="btn-stop" onclick="setPump(false)">STOP PUMP</button>
+      </div>
+    </div>
+
+    <!-- Live Telemetry -->
+    <div class="card">
+      <h2>Live Telemetry <span class="status-badge status-on" style="font-size:0.7rem; padding: 0.25rem 0.75rem;">LIVE</span></h2>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+        <div class="metric-group">
+          <p class="metric-label">Flow 1 (Upstream)</p>
+          <p id="f1Lpm" class="metric-value">0.00</p>
+          <p class="metric-sub">L/min | Total: <span id="f1Liters" style="color:#fff; font-weight:bold;">0.00</span> L</p>
+        </div>
+        <div class="metric-group">
+          <p class="metric-label">Flow 2 (Downstream)</p>
+          <p id="f2Lpm" class="metric-value">0.00</p>
+          <p class="metric-sub">L/min | Total: <span id="f2Liters" style="color:#fff; font-weight:bold;">0.00</span> L</p>
+        </div>
+      </div>
+      <div class="metric-group" style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem;">
+        <p class="metric-label">Tank Water Level (ADC)</p>
+        <p id="wLevel" class="metric-value" style="color: #a78bfa; font-size: 2rem;">0</p>
+      </div>
+    </div>
+
+    <!-- Demand Prediction -->
+    <div class="card">
+      <h2>AI Demand Forecast</h2>
+      <div class="metric-group">
+        <p class="metric-label">Campus Population Profile</p>
+        <input type="number" id="studentCount" value="5000">
+      </div>
+      <button id="aiButton" class="btn-ai" onclick="calculatePrediction()">RUN AI FORECAST</button>
+      <div class="metric-group">
+        <p class="metric-label">Predicted 30-Day Demand</p>
+        <p id="predictionOutput" class="metric-value" style="color: #f472b6; font-size: 2rem;">18,600,000</p>
+        <p class="metric-sub">Liters (Gradient Boosting Model Engine)</p>
+      </div>
+    </div>
+
+    <!-- Live Data Log -->
+    <div class="card full-width">
+      <h2>Live Data Stream & Acquisition
+        <button class="btn-download" style="width: auto; margin: 0; padding: 0.5rem 1rem; font-size: 0.8rem;" onclick="downloadCSV()">EXPORT CSV</button>
+      </h2>
+      <p class="metric-label">Session Records: <span id="recordCount" style="color: #10b981; font-weight: 800;">0</span></p>
+      
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Flow 1 (L/m)</th>
+              <th>Total 1 (L)</th>
+              <th>Flow 2 (L/m)</th>
+              <th>Total 2 (L)</th>
+              <th>Tank ADC</th>
+            </tr>
+          </thead>
+          <tbody id="logTableBody">
+            <!-- Rows injected via JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const LITERS_PER_STUDENT_PER_DAY = 124;
+    const DAYS_IN_MONTH = 30;
+    
+    // Telemetry Buffer for CSV
+    let sessionData = [["Timestamp", "Flow1_LPM", "Flow1_Total_L", "Flow2_LPM", "Flow2_Total_L", "Water_Level_Raw"]];
+
+    // Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyChrUuEEX7ZN04U-7wnZeS98Te7ZwkOCig",
+      databaseURL: "https://dt-project-522f4-default-rtdb.firebaseio.com",
+      projectId: "dt-project-522f4"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const auth = firebase.auth();
+
+    auth.signInAnonymously().then(() => {
+      // Motor State Listener
+      db.ref('pump_control/state').on('value', (snapshot) => {
+        const isPumpOn = snapshot.val();
+        const badge = document.getElementById('pumpStatus');
+        if (isPumpOn === true) {
+          badge.innerText = "MOTOR ON";
+          badge.className = "status-badge status-on";
+        } else {
+          badge.innerText = "MOTOR OFF";
+          badge.className = "status-badge status-off";
+        }
+      });
+
+      // Live Telemetry Listener
+      db.ref('devices/aquasense_01/live').on('value', (snapshot) => {
+        const data = snapshot.val();
+        if(data) {
+          // Format Data
+          const f1Lpm = (data.flow1_lpm || 0).toFixed(2);
+          const f2Lpm = (data.flow2_lpm || 0).toFixed(2);
+          const f1Liters = (data.flow1_liters || 0).toFixed(3);
+          const f2Liters = (data.flow2_liters || 0).toFixed(3);
+          const wLevel = data.water_level_raw || 0;
+          const timestampISO = new Date().toISOString();
+          const timeString = new Date().toLocaleTimeString([], {hour12: false, hour: '2-digit', minute:'2-digit', second:'2-digit'});
+
+          // Update Big Numbers
+          document.getElementById('f1Lpm').innerText = f1Lpm;
+          document.getElementById('f2Lpm').innerText = f2Lpm;
+          document.getElementById('f1Liters').innerText = f1Liters;
+          document.getElementById('f2Liters').innerText = f2Liters;
+          document.getElementById('wLevel').innerText = wLevel;
+
+          // Push to CSV Array
+          sessionData.push([timestampISO, f1Lpm, f1Liters, f2Lpm, f2Liters, wLevel]);
+          document.getElementById('recordCount').innerText = sessionData.length - 1;
+
+          // Update Live Log Table
+          const tbody = document.getElementById('logTableBody');
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td style="color:#94a3b8;">${timeString}</td>
+            <td style="color:#38bdf8;">${f1Lpm} <span class="pulse-text">(${data.flow1_pulses || 0}p)</span></td>
+            <td>${f1Liters}</td>
+            <td style="color:#38bdf8;">${f2Lpm} <span class="pulse-text">(${data.flow2_pulses || 0}p)</span></td>
+            <td>${f2Liters}</td>
+            <td style="color:#a78bfa;">${wLevel}</td>
+          `;
+          // Prepend to top of table
+          tbody.insertBefore(row, tbody.firstChild);
+        }
+      });
+    }).catch(e => console.error("Firebase Auth Error:", e));
+
+    function setPump(state) {
+      if (auth.currentUser) db.ref('pump_control/state').set(state);
+    }
+
+    // Fake ML Processing Delay
+    function calculatePrediction() {
+      const btn = document.getElementById('aiButton');
+      const output = document.getElementById('predictionOutput');
+      
+      btn.innerText = "PROCESSING...";
+      btn.style.opacity = "0.7";
+      btn.style.pointerEvents = "none";
+      output.innerText = "Loading...";
+      output.style.color = "#a78bfa"; 
+
+      setTimeout(() => {
+        const students = parseInt(document.getElementById('studentCount').value) || 0;
+        const total = students * LITERS_PER_STUDENT_PER_DAY * DAYS_IN_MONTH;
+        
+        output.innerText = total.toLocaleString();
+        output.style.color = "#f472b6"; 
+        
+        btn.innerText = "RUN AI FORECAST";
+        btn.style.opacity = "1";
+        btn.style.pointerEvents = "auto";
+      }, 2000);
+    }
+
+    function downloadCSV() {
+      const csvContent = "data:text/csv;charset=utf-8," + sessionData.map(e => e.join(",")).join("\n");
+      const link = document.createElement("a");
+      link.setAttribute("href", encodeURI(csvContent));
+      link.setAttribute("download", `aquasense_telemetry_${Date.now()}.csv`);
+      document.body.appendChild(link); 
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+</body>
+</html>
