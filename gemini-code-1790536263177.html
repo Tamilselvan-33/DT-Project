@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AquaSense Motor Control</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <style>
+    body { background-color: #121212; color: white; font-family: sans-serif; text-align: center; padding-top: 50px; }
+    button { padding: 15px 30px; font-size: 20px; font-weight: bold; margin: 10px; cursor: pointer; border: none; border-radius: 8px; }
+    #startBtn { background-color: #4CAF50; color: white; }
+    #stopBtn { background-color: #f44336; color: white; }
+    #status { font-size: 40px; font-weight: bold; margin-top: 30px; color: #888; }
+  </style>
+</head>
+<body>
+  <h1>AquaSense Motor Control</h1>
+  
+  <button id="startBtn" onclick="setPump(true)">START PUMP</button>
+  <button id="stopBtn" onclick="setPump(false)">STOP PUMP</button>
+  
+  <div id="status">STATUS: UNKNOWN</div>
+
+  <script>
+    // Initialize Firebase with your exact database URL
+    const firebaseConfig = {
+      databaseURL: "https://dt-project-522f4-default-rtdb.firebaseio.com"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Listen for changes in the database and update the screen
+    db.ref('pump_control/state').on('value', (snapshot) => {
+      const isPumpOn = snapshot.val();
+      const statusText = document.getElementById('status');
+      
+      if (isPumpOn === true) {
+        statusText.innerText = "STATUS: MOTOR ON";
+        statusText.style.color = "#4CAF50"; // Green
+      } else {
+        statusText.innerText = "STATUS: MOTOR OFF";
+        statusText.style.color = "#f44336"; // Red
+      }
+    });
+
+    // Write to the database when buttons are clicked
+    function setPump(state) {
+      db.ref('pump_control/state').set(state);
+    }
+  </script>
+</body>
+</html>
