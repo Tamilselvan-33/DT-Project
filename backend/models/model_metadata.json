@@ -1,0 +1,85 @@
+{
+  "model_version": "3.0.0-population-xgboost",
+  "model_type": "xgboost.XGBRegressor",
+  "feature_names": [
+    "student_population"
+  ],
+  "target_name": "future_30d_usage_liters",
+  "training_rows": 14000,
+  "validation_rows": 3000,
+  "test_rows": 3000,
+  "population_min": 100,
+  "population_max": 10000,
+  "design_lpcd": 120,
+  "test_mae": 664986.57,
+  "test_rmse": 998815.25,
+  "test_r2": 0.9915,
+  "test_mape": 4.14,
+  "test_lpcd_mae": 4.95,
+  "random_seed": 42,
+  "hyperparameters": {
+    "n_estimators": 317,
+    "max_depth": 5,
+    "learning_rate": 0.03,
+    "min_child_weight": 5,
+    "subsample": 0.85,
+    "colsample_bytree": 1.0,
+    "monotone_constraints": "(1)"
+  },
+  "sanity_test_results": {
+    "TEST A": {
+      "population": 500,
+      "predicted_30d_usage_liters": 1814139.38,
+      "predicted_daily_average_liters": 60471.31,
+      "implied_lpcd": 120.94,
+      "benchmark_liters": 1800000.0,
+      "benchmark_ratio": 1.0079,
+      "is_sane": true
+    },
+    "TEST B": {
+      "population": 1000,
+      "predicted_30d_usage_liters": 3562341.5,
+      "predicted_daily_average_liters": 118744.72,
+      "implied_lpcd": 118.74,
+      "benchmark_liters": 3600000.0,
+      "benchmark_ratio": 0.9895,
+      "is_sane": true
+    },
+    "TEST C": {
+      "population": 2500,
+      "predicted_30d_usage_liters": 8997484.0,
+      "predicted_daily_average_liters": 299916.13,
+      "implied_lpcd": 119.97,
+      "benchmark_liters": 9000000.0,
+      "benchmark_ratio": 0.9997,
+      "is_sane": true
+    },
+    "TEST D": {
+      "population": 5000,
+      "predicted_30d_usage_liters": 17916214.0,
+      "predicted_daily_average_liters": 597207.13,
+      "implied_lpcd": 119.44,
+      "benchmark_liters": 18000000.0,
+      "benchmark_ratio": 0.9953,
+      "is_sane": true
+    },
+    "TEST E": {
+      "population": 7500,
+      "predicted_30d_usage_liters": 26827248.0,
+      "predicted_daily_average_liters": 894241.6,
+      "implied_lpcd": 119.23,
+      "benchmark_liters": 27000000.0,
+      "benchmark_ratio": 0.9936,
+      "is_sane": true
+    },
+    "TEST F": {
+      "population": 10000,
+      "predicted_30d_usage_liters": 35870876.0,
+      "predicted_daily_average_liters": 1195695.87,
+      "implied_lpcd": 119.57,
+      "benchmark_liters": 36000000.0,
+      "benchmark_ratio": 0.9964,
+      "is_sane": true
+    }
+  }
+}

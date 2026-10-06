@@ -1,0 +1,6 @@
+{
+  "features": [
+    "student_population"
+  ],
+  "target": "future_30d_usage_liters"
+}
