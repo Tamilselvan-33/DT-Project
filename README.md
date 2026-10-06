@@ -58,22 +58,27 @@ AquaSense/
 
 ---
 
-## Getting Started
+### 1. Clone the Repository
+```bash
+git clone https://github.com/Tamilselvan-33/DT-Project.git
+cd DT-Project
+```
 
-### 1. Backend ML Service
+### 2. Backend ML Service (FastAPI)
 ```bash
 cd backend
 pip install -r requirements.txt
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+python -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
+Backend runs at `http://127.0.0.1:8000` (docs at `http://127.0.0.1:8000/docs`).
 
-### 2. Frontend Web Application
+### 3. Frontend Web Application (React + Vite)
+In a second terminal:
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-
 Open [http://localhost:5173](http://localhost:5173) in your browser.
 
 ---
