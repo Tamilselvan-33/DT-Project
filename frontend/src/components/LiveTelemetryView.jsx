@@ -7,10 +7,12 @@ import {
   Activity,
   CheckCircle2,
   AlertTriangle,
-  Droplet,
   Zap,
-  Radio,
-  ArrowRight
+  ArrowRight,
+  ShieldCheck,
+  ShieldAlert,
+  Flame,
+  Droplet
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -23,7 +25,12 @@ import {
 } from 'recharts';
 import { sendPumpCommand, DEFAULT_DEVICE_ID } from '../firebase/database';
 
-export default function LiveTelemetryView({ telemetry, deviceStatus }) {
+export default function LiveTelemetryView({
+  telemetry,
+  deviceStatus,
+  scenarioId,
+  onTogglePump
+}) {
   // Rolling live buffer for the real-time oscilloscope waveform
   const [liveStreamHistory, setLiveStreamHistory] = useState([]);
 
@@ -47,28 +54,43 @@ export default function LiveTelemetryView({ telemetry, deviceStatus }) {
   if (!telemetry) {
     return (
       <div className="card" style={{ padding: '60px', textAlign: 'center', maxWidth: '520px', margin: '40px auto' }}>
-        <Activity size={36} color="#00f2fe" style={{ margin: '0 auto 16px' }} />
-        <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '6px' }}>Connecting to Sensor Stream</h3>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Waiting for initial telemetry packet from ESP32...</p>
+        <Activity size={40} color="#0284c7" style={{ margin: '0 auto 16px' }} />
+        <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '8px', color: '#0f172a' }}>
+          Connecting to Sensor Stream
+        </h3>
+        <p style={{ color: '#64748b', fontSize: '0.9rem' }}>
+          Listening for telemetry packets from ESP32 Firebase RTDB...
+        </p>
       </div>
     );
   }
 
   const isPumpActive = Boolean(deviceStatus?.pump ?? telemetry?.pump_status);
   const diffLpm = Math.abs(Number(telemetry.flow_difference_l_min || 0));
-  const hasLeak = diffLpm > 2.0;
+  const hasLeak = diffLpm > 2.0 && Number(telemetry.flow1_lpm || 0) > 1.0;
+  const levelPercent = Math.min(100, Math.max(0, Math.round(((telemetry.water_level_raw || 0) / 4095) * 100)));
+  const totalLiters = Number(telemetry.flow1_total_liters || 0);
+
+  // Dynamic scenarios calculations
+  const isDryRunRisk = levelPercent < 15 && isPumpActive;
+  const isOverflowRisk = levelPercent >= 88;
+  const estimatedPowerWatts = isPumpActive ? (750 + Math.random() * 20).toFixed(0) : 4;
+  const dynamicHydraulicEfficiency = isPumpActive && Number(telemetry.flow1_lpm || 0) > 0
+    ? Math.min(100, ((Number(telemetry.flow2_lpm || 0) / Number(telemetry.flow1_lpm || 1)) * 100)).toFixed(1)
+    : '100.0';
 
   const handleTogglePump = async () => {
+    if (onTogglePump) {
+      onTogglePump();
+      return;
+    }
     const nextState = !isPumpActive;
     await sendPumpCommand(DEFAULT_DEVICE_ID, nextState ? 'ON' : 'OFF');
   };
 
-  const levelPercent = Math.min(100, Math.max(0, Math.round(((telemetry.water_level_raw || 0) / 4095) * 100)));
-  const totalLiters = Number(telemetry.flow1_total_liters || 0);
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* Top Banner / System State Summary */}
+      {/* Top Banner / System State Summary in Light Executive Style */}
       <div className="card" style={{
         padding: '16px 24px',
         display: 'flex',
@@ -76,41 +98,60 @@ export default function LiveTelemetryView({ telemetry, deviceStatus }) {
         justifyContent: 'space-between',
         flexWrap: 'wrap',
         gap: '16px',
-        background: 'linear-gradient(135deg, rgba(14, 22, 41, 0.9) 0%, rgba(15, 28, 56, 0.7) 100%)',
-        border: '1px solid rgba(56, 189, 248, 0.2)'
+        background: '#ffffff',
+        border: '1px solid var(--border-subtle)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '28px', flexWrap: 'wrap' }}>
           <div>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
               Monitoring Status
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
-              <span className="status-dot dot-green" />
-              <span style={{ fontWeight: 700, fontSize: '0.95rem', color: '#fff' }}>Hydraulic Stream Active</span>
+              <span className={`status-dot ${hasLeak ? 'dot-red' : isDryRunRisk ? 'dot-amber' : 'dot-green'}`} />
+              <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#0f172a' }}>
+                {hasLeak ? 'Hydraulic Anomaly' : isDryRunRisk ? 'Dry-Run Warning' : 'Hydraulic Stream Active'}
+              </span>
             </div>
           </div>
 
-          <div style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: '28px' }}>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
+          <div style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: '24px' }}>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
               Pump Actuator
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
               <span style={{
                 fontSize: '0.9rem',
                 fontWeight: 800,
-                color: isPumpActive ? '#10b981' : '#94a3b8'
+                color: isPumpActive ? '#059669' : '#64748b'
               }}>
                 {isPumpActive ? 'RUNNING (ACTIVE)' : 'STANDBY (IDLE)'}
+              </span>
+              <span className="mono" style={{ fontSize: '0.75rem', color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
+                {estimatedPowerWatts}W
               </span>
             </div>
           </div>
 
-          <div style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: '28px' }}>
-            <span style={{ fontSize: '0.72rem', color: 'var(--text-dim)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
-              Accumulated Throughput
+          <div style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: '24px' }}>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
+              System Throughput
             </span>
-            <div className="mono" style={{ fontWeight: 700, fontSize: '1rem', marginTop: '3px', color: '#38bdf8' }}>
+            <div className="mono" style={{ fontWeight: 800, fontSize: '1rem', marginTop: '3px', color: '#0284c7' }}>
               {totalLiters.toFixed(2)} L
+            </div>
+          </div>
+
+          <div style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: '24px' }}>
+            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
+              Line Efficiency
+            </span>
+            <div className="mono" style={{
+              fontWeight: 800,
+              fontSize: '1rem',
+              marginTop: '3px',
+              color: Number(dynamicHydraulicEfficiency) > 90 ? '#059669' : '#e11d48'
+            }}>
+              {dynamicHydraulicEfficiency}%
             </div>
           </div>
         </div>
@@ -140,133 +181,133 @@ export default function LiveTelemetryView({ telemetry, deviceStatus }) {
         {/* Sensor 1: Inlet */}
         <div className="card" style={{
           padding: '22px',
-          borderLeft: '4px solid #00f2fe'
+          borderLeft: '4px solid #0284c7'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Inlet Flow (Sensor 1)
             </span>
             <div style={{
-              width: '32px',
-              height: '32px',
+              width: '36px',
+              height: '36px',
               borderRadius: '8px',
-              background: 'rgba(0, 242, 254, 0.12)',
+              background: '#e0f2fe',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              <Gauge size={16} color="#00f2fe" />
+              <Gauge size={18} color="#0284c7" />
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
-            <span className="mono" style={{ fontSize: '2.5rem', fontWeight: 800, color: '#00f2fe' }}>
+            <span className="mono" style={{ fontSize: '2.5rem', fontWeight: 800, color: '#0284c7' }}>
               {Number(telemetry.flow1_lpm || 0).toFixed(2)}
             </span>
-            <span style={{ fontSize: '0.92rem', color: 'var(--text-muted)', fontWeight: 600 }}>L/min</span>
+            <span style={{ fontSize: '0.92rem', color: '#64748b', fontWeight: 600 }}>L/min</span>
           </div>
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             fontSize: '0.82rem',
-            color: 'var(--text-dim)',
+            color: '#64748b',
             borderTop: '1px solid var(--border-subtle)',
             paddingTop: '12px'
           }}>
-            <span>Total: <strong className="mono" style={{ color: '#fff' }}>{Number(telemetry.flow1_total_liters || 0).toFixed(2)} L</strong></span>
-            <span>Pulses: <strong className="mono" style={{ color: 'var(--text-muted)' }}>{telemetry.flow1_total_pulses || 0}</strong></span>
+            <span>Total: <strong className="mono" style={{ color: '#0f172a' }}>{Number(telemetry.flow1_total_liters || 0).toFixed(2)} L</strong></span>
+            <span>Pulses: <strong className="mono" style={{ color: '#334155' }}>{telemetry.flow1_total_pulses || 0}</strong></span>
           </div>
         </div>
 
         {/* Sensor 2: Outlet */}
         <div className="card" style={{
           padding: '22px',
-          borderLeft: '4px solid #0ea5e9'
+          borderLeft: '4px solid #0891b2'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Outlet Flow (Sensor 2)
             </span>
             <div style={{
-              width: '32px',
-              height: '32px',
+              width: '36px',
+              height: '36px',
               borderRadius: '8px',
-              background: 'rgba(14, 165, 233, 0.12)',
+              background: '#cffafe',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              <Gauge size={16} color="#0ea5e9" />
+              <Gauge size={18} color="#0891b2" />
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
-            <span className="mono" style={{ fontSize: '2.5rem', fontWeight: 800, color: '#38bdf8' }}>
+            <span className="mono" style={{ fontSize: '2.5rem', fontWeight: 800, color: '#0891b2' }}>
               {Number(telemetry.flow2_lpm || 0).toFixed(2)}
             </span>
-            <span style={{ fontSize: '0.92rem', color: 'var(--text-muted)', fontWeight: 600 }}>L/min</span>
+            <span style={{ fontSize: '0.92rem', color: '#64748b', fontWeight: 600 }}>L/min</span>
           </div>
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             fontSize: '0.82rem',
-            color: 'var(--text-dim)',
+            color: '#64748b',
             borderTop: '1px solid var(--border-subtle)',
             paddingTop: '12px'
           }}>
-            <span>Total: <strong className="mono" style={{ color: '#fff' }}>{Number(telemetry.flow2_total_liters || 0).toFixed(2)} L</strong></span>
-            <span>Pulses: <strong className="mono" style={{ color: 'var(--text-muted)' }}>{telemetry.flow2_total_pulses || 0}</strong></span>
+            <span>Total: <strong className="mono" style={{ color: '#0f172a' }}>{Number(telemetry.flow2_total_liters || 0).toFixed(2)} L</strong></span>
+            <span>Pulses: <strong className="mono" style={{ color: '#334155' }}>{telemetry.flow2_total_pulses || 0}</strong></span>
           </div>
         </div>
 
         {/* Flow Difference */}
         <div className="card" style={{
           padding: '22px',
-          borderLeft: `4px solid ${hasLeak ? '#f43f5e' : '#10b981'}`
+          borderLeft: `4px solid ${hasLeak ? '#e11d48' : '#059669'}`
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Flow Delta (Δ)
             </span>
             <div style={{
-              width: '32px',
-              height: '32px',
+              width: '36px',
+              height: '36px',
               borderRadius: '8px',
-              background: hasLeak ? 'rgba(244, 63, 94, 0.12)' : 'rgba(16, 185, 129, 0.12)',
+              background: hasLeak ? '#ffe4e6' : '#dcfce7',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              <ArrowRightLeft size={16} color={hasLeak ? '#f43f5e' : '#10b981'} />
+              <ArrowRightLeft size={18} color={hasLeak ? '#e11d48' : '#059669'} />
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
             <span className="mono" style={{
               fontSize: '2.5rem',
               fontWeight: 800,
-              color: hasLeak ? '#f43f5e' : '#10b981'
+              color: hasLeak ? '#e11d48' : '#059669'
             }}>
               {Number(telemetry.flow_difference_l_min || 0).toFixed(2)}
             </span>
-            <span style={{ fontSize: '0.92rem', color: 'var(--text-muted)', fontWeight: 600 }}>L/min</span>
+            <span style={{ fontSize: '0.92rem', color: '#64748b', fontWeight: 600 }}>L/min</span>
           </div>
           <div style={{
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
             fontSize: '0.82rem',
-            color: 'var(--text-dim)',
+            color: '#64748b',
             borderTop: '1px solid var(--border-subtle)',
             paddingTop: '12px'
           }}>
-            <span>Variance: <strong className="mono" style={{ color: '#fff' }}>{Number(telemetry.flow_difference_percent || 0).toFixed(1)}%</strong></span>
+            <span>Variance: <strong className="mono" style={{ color: '#0f172a' }}>{Number(telemetry.flow_difference_percent || 0).toFixed(1)}%</strong></span>
             <span style={{
               padding: '2px 8px',
               borderRadius: '4px',
               fontWeight: 700,
               fontSize: '0.72rem',
-              background: hasLeak ? 'rgba(244, 63, 94, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-              color: hasLeak ? '#f43f5e' : '#10b981'
+              background: hasLeak ? '#ffe4e6' : '#dcfce7',
+              color: hasLeak ? '#e11d48' : '#059669'
             }}>
-              {hasLeak ? 'Deviation Alert' : 'Balanced Flow'}
+              {hasLeak ? 'Leak Alert' : 'Balanced Flow'}
             </span>
           </div>
         </div>
@@ -274,29 +315,29 @@ export default function LiveTelemetryView({ telemetry, deviceStatus }) {
         {/* Tank Water Level */}
         <div className="card" style={{
           padding: '22px',
-          borderLeft: '4px solid #8b5cf6'
+          borderLeft: '4px solid #7c3aed'
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
               Tank Water Level
             </span>
             <div style={{
-              width: '32px',
-              height: '32px',
+              width: '36px',
+              height: '36px',
               borderRadius: '8px',
-              background: 'rgba(139, 92, 246, 0.12)',
+              background: '#ede9fe',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center'
             }}>
-              <Waves size={16} color="#a78bfa" />
+              <Waves size={18} color="#7c3aed" />
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
-            <span className="mono" style={{ fontSize: '2.5rem', fontWeight: 800, color: '#c4b5fd' }}>
+            <span className="mono" style={{ fontSize: '2.5rem', fontWeight: 800, color: '#7c3aed' }}>
               {levelPercent}%
             </span>
-            <span className="mono" style={{ fontSize: '0.88rem', color: 'var(--text-dim)' }}>
+            <span className="mono" style={{ fontSize: '0.88rem', color: '#64748b' }}>
               ({telemetry.water_level_raw || 0} / 4095)
             </span>
           </div>
@@ -304,13 +345,13 @@ export default function LiveTelemetryView({ telemetry, deviceStatus }) {
             width: '100%',
             height: '8px',
             borderRadius: '4px',
-            background: 'var(--bg-element)',
+            background: '#f1f5f9',
             overflow: 'hidden'
           }}>
             <div style={{
               width: `${levelPercent}%`,
               height: '100%',
-              background: 'linear-gradient(90deg, #8b5cf6 0%, #00f2fe 100%)',
+              background: 'linear-gradient(90deg, #7c3aed 0%, #0284c7 100%)',
               borderRadius: '4px',
               transition: 'width 0.5s ease'
             }} />
@@ -329,29 +370,29 @@ export default function LiveTelemetryView({ telemetry, deviceStatus }) {
         <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Activity size={18} color="#00f2fe" />
-              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>
+              <Activity size={20} color="#0284c7" />
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
                 Real-Time Flow Telemetry Stream
               </h3>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '0.78rem' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#00f2fe' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#00f2fe' }} />
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0284c7', fontWeight: 600 }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#0284c7' }} />
                 Sensor 1 (Inlet)
               </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#38bdf8' }}>
-                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#38bdf8' }} />
+              <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#0891b2', fontWeight: 600 }}>
+                <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#0891b2' }} />
                 Sensor 2 (Outlet)
               </span>
               <span className="mono" style={{
                 padding: '2px 8px',
                 borderRadius: '4px',
-                background: 'rgba(0, 242, 254, 0.1)',
-                color: '#00f2fe',
-                fontWeight: 600,
+                background: '#e0f2fe',
+                color: '#0369a1',
+                fontWeight: 700,
                 fontSize: '0.72rem'
               }}>
-                LIVE 5s TICK
+                5s TICK
               </span>
             </div>
           </div>
@@ -360,50 +401,52 @@ export default function LiveTelemetryView({ telemetry, deviceStatus }) {
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={liveStreamHistory.length > 0 ? liveStreamHistory : [{ time: 'Now', flow1: 0, flow2: 0 }]} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="liveFlow1" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#00f2fe" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#00f2fe" stopOpacity={0.0} />
+                  <linearGradient id="liveFlow1Light" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#0284c7" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#0284c7" stopOpacity={0.0} />
                   </linearGradient>
-                  <linearGradient id="liveFlow2" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.35} />
-                    <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0.0} />
+                  <linearGradient id="liveFlow2Light" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#0891b2" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#0891b2" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255, 255, 255, 0.05)" />
-                <XAxis dataKey="time" stroke="#475569" tick={{ fontSize: 10 }} />
-                <YAxis stroke="#475569" tick={{ fontSize: 10 }} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="time" stroke="#64748b" tick={{ fontSize: 10 }} />
+                <YAxis stroke="#64748b" tick={{ fontSize: 10 }} />
                 <Tooltip
                   formatter={(val, name) => [`${Number(val).toFixed(2)} L/min`, name === 'flow1' ? 'Sensor 1 (Inlet)' : 'Sensor 2 (Outlet)']}
                   contentStyle={{
-                    background: '#0a0f1d',
-                    border: '1px solid rgba(56, 189, 248, 0.3)',
+                    background: '#ffffff',
+                    border: '1px solid #cbd5e1',
                     borderRadius: '8px',
-                    fontSize: '0.8rem'
+                    fontSize: '0.82rem',
+                    boxShadow: '0 4px 12px rgba(15, 23, 42, 0.1)',
+                    color: '#0f172a'
                   }}
                 />
-                <Area type="monotone" dataKey="flow1" stroke="#00f2fe" strokeWidth={2.5} fill="url(#liveFlow1)" isAnimationActive={false} />
-                <Area type="monotone" dataKey="flow2" stroke="#38bdf8" strokeWidth={2.5} fill="url(#liveFlow2)" isAnimationActive={false} />
+                <Area type="monotone" dataKey="flow1" stroke="#0284c7" strokeWidth={2.5} fill="url(#liveFlow1Light)" isAnimationActive={false} />
+                <Area type="monotone" dataKey="flow2" stroke="#0891b2" strokeWidth={2.5} fill="url(#liveFlow2Light)" isAnimationActive={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Right: Visual Liquid Water Storage Tank */}
+        {/* Right: Visual Liquid Water Storage Tank in Light Style */}
         <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Waves size={18} color="#06b6d4" />
-              <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>Reservoir Tank</h3>
+              <Waves size={20} color="#0284c7" />
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>Reservoir Tank</h3>
             </div>
             <span style={{
               fontSize: '0.75rem',
               fontWeight: 700,
-              padding: '2px 8px',
-              borderRadius: '4px',
-              background: levelPercent > 20 ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-              color: levelPercent > 20 ? '#10b981' : '#f43f5e'
+              padding: '3px 10px',
+              borderRadius: '12px',
+              background: levelPercent > 85 ? '#cffafe' : levelPercent > 20 ? '#dcfce7' : '#fee2e2',
+              color: levelPercent > 85 ? '#0891b2' : levelPercent > 20 ? '#059669' : '#e11d48'
             }}>
-              {levelPercent > 75 ? 'Optimal Level' : levelPercent > 25 ? 'Normal Level' : 'Low Reserve'}
+              {levelPercent > 85 ? 'High Volume' : levelPercent > 25 ? 'Optimal Reserve' : 'Critical Low'}
             </span>
           </div>
 
@@ -411,11 +454,11 @@ export default function LiveTelemetryView({ telemetry, deviceStatus }) {
           <div style={{
             position: 'relative',
             width: '160px',
-            height: '210px',
+            height: '220px',
             borderRadius: '24px',
-            background: 'linear-gradient(180deg, #090e1a 0%, #0d172a 100%)',
-            border: '2px solid rgba(56, 189, 248, 0.3)',
-            boxShadow: 'inset 0 0 20px rgba(0, 0, 0, 0.8), 0 0 15px rgba(6, 182, 212, 0.15)',
+            background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)',
+            border: '2px solid #cbd5e1',
+            boxShadow: 'inset 0 0 15px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(2, 132, 199, 0.1)',
             overflow: 'hidden',
             display: 'flex',
             alignItems: 'center',
@@ -431,16 +474,16 @@ export default function LiveTelemetryView({ telemetry, deviceStatus }) {
             </div>
 
             {/* Level Graduation Lines */}
-            <div style={{ position: 'absolute', right: '10px', top: '25%', fontSize: '0.68rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>75%</div>
-            <div style={{ position: 'absolute', right: '10px', top: '50%', fontSize: '0.68rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>50%</div>
-            <div style={{ position: 'absolute', right: '10px', top: '75%', fontSize: '0.68rem', color: 'rgba(255,255,255,0.4)', fontWeight: 600 }}>25%</div>
+            <div style={{ position: 'absolute', right: '10px', top: '25%', fontSize: '0.68rem', color: '#64748b', fontWeight: 700 }}>75%</div>
+            <div style={{ position: 'absolute', right: '10px', top: '50%', fontSize: '0.68rem', color: '#64748b', fontWeight: 700 }}>50%</div>
+            <div style={{ position: 'absolute', right: '10px', top: '75%', fontSize: '0.68rem', color: '#64748b', fontWeight: 700 }}>25%</div>
 
             {/* Center Percentage Display */}
             <div style={{ position: 'relative', zIndex: 10, textAlign: 'center' }}>
-              <div className="mono" style={{ fontSize: '2rem', fontWeight: 800, color: '#ffffff', textShadow: '0 2px 8px rgba(0,0,0,0.8)' }}>
+              <div className="mono" style={{ fontSize: '2.2rem', fontWeight: 800, color: levelPercent > 40 ? '#ffffff' : '#0f172a', textShadow: levelPercent > 40 ? '0 2px 4px rgba(0,0,0,0.3)' : 'none' }}>
                 {levelPercent}%
               </div>
-              <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.8)', fontWeight: 600 }}>
+              <div style={{ fontSize: '0.75rem', color: levelPercent > 40 ? 'rgba(255,255,255,0.9)' : '#475569', fontWeight: 700 }}>
                 {telemetry.water_level_raw || 0} ADC
               </div>
             </div>
@@ -448,17 +491,17 @@ export default function LiveTelemetryView({ telemetry, deviceStatus }) {
         </div>
       </div>
 
-      {/* Bottom Section: Hydraulic Pipeline Diagram & Active Topology */}
+      {/* Bottom Section: Hydraulic Pipeline Diagram & Active Topology in Light Style */}
       <div className="card" style={{ padding: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Zap size={18} color="#38bdf8" />
-            <h3 style={{ fontSize: '1rem', fontWeight: 700 }}>
+            <Zap size={20} color="#0284c7" />
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
               Physical Hydraulic Flow Schematic
             </h3>
           </div>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-            Physical GPIO Pinout: S1 (GPIO 26) · S2 (GPIO 27) · Level (GPIO 34) · Relay (GPIO 25)
+          <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500 }}>
+            Physical GPIO: S1 (GPIO 26) · S2 (GPIO 27) · Level (GPIO 34) · Relay (GPIO 25)
           </span>
         </div>
 
@@ -471,35 +514,37 @@ export default function LiveTelemetryView({ telemetry, deviceStatus }) {
         }}>
           {/* Node 1: Inlet Sensor */}
           <div style={{
-            background: 'var(--bg-subtle)',
+            background: '#f8fafc',
             padding: '16px',
             borderRadius: 'var(--radius-sm)',
-            border: '1px solid rgba(0, 242, 254, 0.25)',
+            border: '1px solid #e0f2fe',
+            boxShadow: 'var(--shadow-sm)',
             textAlign: 'center'
           }}>
-            <div style={{ fontSize: '0.72rem', color: '#00f2fe', fontWeight: 700, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: '0.72rem', color: '#0284c7', fontWeight: 800, textTransform: 'uppercase' }}>
               Inlet Intake
             </div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fff', marginTop: '4px' }}>
+            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>
               Sensor 1 (GPIO 26)
             </div>
-            <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#00f2fe', marginTop: '4px' }}>
+            <div className="mono" style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0284c7', marginTop: '4px' }}>
               {Number(telemetry.flow1_lpm || 0).toFixed(2)} L/min
             </div>
           </div>
 
           {/* Node 2: Centrifugal Pump */}
           <div style={{
-            background: 'var(--bg-subtle)',
+            background: '#f8fafc',
             padding: '16px',
             borderRadius: 'var(--radius-sm)',
-            border: isPumpActive ? '1px solid rgba(16, 185, 129, 0.5)' : '1px solid var(--border-subtle)',
+            border: isPumpActive ? '1px solid #bbf7d0' : '1px solid var(--border-subtle)',
+            boxShadow: 'var(--shadow-sm)',
             textAlign: 'center'
           }}>
-            <div style={{ fontSize: '0.72rem', color: isPumpActive ? '#10b981' : 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: '0.72rem', color: isPumpActive ? '#059669' : '#64748b', fontWeight: 800, textTransform: 'uppercase' }}>
               Relay Actuator
             </div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fff', marginTop: '4px' }}>
+            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>
               Submersible Pump (GPIO 25)
             </div>
             <div style={{
@@ -507,10 +552,10 @@ export default function LiveTelemetryView({ telemetry, deviceStatus }) {
               alignItems: 'center',
               gap: '6px',
               marginTop: '6px',
-              padding: '3px 10px',
+              padding: '4px 12px',
               borderRadius: '6px',
-              background: isPumpActive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.05)',
-              color: isPumpActive ? '#10b981' : 'var(--text-muted)',
+              background: isPumpActive ? '#dcfce7' : '#f1f5f9',
+              color: isPumpActive ? '#059669' : '#64748b',
               fontWeight: 700,
               fontSize: '0.85rem'
             }}>
@@ -521,38 +566,40 @@ export default function LiveTelemetryView({ telemetry, deviceStatus }) {
 
           {/* Node 3: Storage Reservoir */}
           <div style={{
-            background: 'var(--bg-subtle)',
+            background: '#f8fafc',
             padding: '16px',
             borderRadius: 'var(--radius-sm)',
-            border: '1px solid rgba(139, 92, 246, 0.25)',
+            border: '1px solid #ede9fe',
+            boxShadow: 'var(--shadow-sm)',
             textAlign: 'center'
           }}>
-            <div style={{ fontSize: '0.72rem', color: '#a78bfa', fontWeight: 700, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: '0.72rem', color: '#7c3aed', fontWeight: 800, textTransform: 'uppercase' }}>
               Storage Tank
             </div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fff', marginTop: '4px' }}>
+            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>
               Level Sensor (GPIO 34)
             </div>
-            <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#c4b5fd', marginTop: '4px' }}>
+            <div className="mono" style={{ fontSize: '1.3rem', fontWeight: 800, color: '#7c3aed', marginTop: '4px' }}>
               {levelPercent}% Capacity
             </div>
           </div>
 
           {/* Node 4: Outlet Sensor */}
           <div style={{
-            background: 'var(--bg-subtle)',
+            background: '#f8fafc',
             padding: '16px',
             borderRadius: 'var(--radius-sm)',
-            border: '1px solid rgba(14, 165, 233, 0.25)',
+            border: '1px solid #cffafe',
+            boxShadow: 'var(--shadow-sm)',
             textAlign: 'center'
           }}>
-            <div style={{ fontSize: '0.72rem', color: '#38bdf8', fontWeight: 700, textTransform: 'uppercase' }}>
+            <div style={{ fontSize: '0.72rem', color: '#0891b2', fontWeight: 800, textTransform: 'uppercase' }}>
               Discharge Outlet
             </div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fff', marginTop: '4px' }}>
+            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>
               Sensor 2 (GPIO 27)
             </div>
-            <div className="mono" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#38bdf8', marginTop: '4px' }}>
+            <div className="mono" style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0891b2', marginTop: '4px' }}>
               {Number(telemetry.flow2_lpm || 0).toFixed(2)} L/min
             </div>
           </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Header from './components/Header';
+import ScenarioDiagnosticBanner, { SCENARIO_PRESETS } from './components/ScenarioDiagnosticBanner';
 import LiveTelemetryView from './components/LiveTelemetryView';
 import HistoricalView from './components/HistoricalView';
 import PumpControlView from './components/PumpControlView';
@@ -12,7 +13,8 @@ import {
   subscribeToHistoricalReadings,
   subscribeToPumpStatus,
   getHistoricalReadings,
-  recordTelemetryReading
+  recordTelemetryReading,
+  sendPumpCommand
 } from './firebase/database';
 import { checkBackendHealth } from './api/mlService';
 
@@ -21,12 +23,18 @@ export default function App() {
   const [firebaseConnected, setFirebaseConnected] = useState(false);
   const [backendStatus, setBackendStatus] = useState(null);
 
+  // Active Scenario Mode ('live' or scenario preset id)
+  const [activeScenarioId, setActiveScenarioId] = useState('live');
+
   // Telemetry & Device State directly backed by Firebase
   const [telemetry, setTelemetry] = useState(null);
   const [deviceStatus, setDeviceStatus] = useState(null);
   const [readings, setReadings] = useState([]);
   const [historyLimit, setHistoryLimit] = useState(50);
   const [historyLoading, setHistoryLoading] = useState(false);
+
+  // Local scenario state override for pump toggle in simulation mode
+  const [scenarioPumpOverride, setScenarioPumpOverride] = useState(null);
 
   // Keep a ref to the latest telemetry for the 5-second interval archiver
   const latestTelemetryRef = useRef(null);
@@ -57,7 +65,6 @@ export default function App() {
   }, []);
 
   // 3. Periodic 5-Second Telemetry Archiver to Firebase
-  // Automatically saves incoming ESP telemetry to /readings/aquasense_01/{timestamp}
   useEffect(() => {
     const archiveTimer = setInterval(() => {
       const current = latestTelemetryRef.current;
@@ -133,19 +140,45 @@ export default function App() {
     return () => clearInterval(interval);
   }, [pollBackend]);
 
-  // User requested: Always pretend ESP is online and allow free access
-  const espOnline = true;
-  const lastSeenSeconds = 0;
+  // Derive Effective Telemetry based on active scenario mode
+  const selectedPreset = SCENARIO_PRESETS.find((s) => s.id === activeScenarioId);
+  const isSimulatedScenario = activeScenarioId !== 'live' && selectedPreset?.data;
+
+  const effectiveTelemetry = isSimulatedScenario
+    ? {
+        ...selectedPreset.data,
+        pump_status: scenarioPumpOverride !== null ? scenarioPumpOverride : selectedPreset.data.pump_status
+      }
+    : telemetry;
+
+  const effectivePumpStatus = isSimulatedScenario
+    ? (scenarioPumpOverride !== null ? scenarioPumpOverride : selectedPreset.data.pump_status)
+    : Boolean(deviceStatus?.pump ?? telemetry?.pump_status);
+
+  // Toggle pump handler
+  const handleTogglePump = async () => {
+    if (isSimulatedScenario) {
+      setScenarioPumpOverride(!effectivePumpStatus);
+    } else {
+      const nextState = !effectivePumpStatus;
+      await sendPumpCommand(DEFAULT_DEVICE_ID, nextState ? 'ON' : 'OFF');
+    }
+  };
+
+  // When switching scenario presets, reset local pump override
+  const handleSelectScenario = (id) => {
+    setActiveScenarioId(id);
+    setScenarioPumpOverride(null);
+  };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-app)' }}>
       <Header
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         firebaseConnected={firebaseConnected}
-        espOnline={espOnline}
+        espOnline={true}
         backendStatus={backendStatus}
-        lastSeenSeconds={lastSeenSeconds}
       />
 
       <main style={{
@@ -153,12 +186,25 @@ export default function App() {
         maxWidth: '1360px',
         width: '100%',
         margin: '0 auto',
-        padding: '24px'
+        padding: '24px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '20px'
       }}>
+        {/* Dynamic Scenario Diagnostic Banner & Selector (Always present on top of the workspace) */}
+        <ScenarioDiagnosticBanner
+          activeScenarioId={activeScenarioId}
+          onSelectScenario={handleSelectScenario}
+          effectiveTelemetry={effectiveTelemetry}
+          isPumpActive={effectivePumpStatus}
+        />
+
         {activeTab === 'live' && (
           <LiveTelemetryView
-            telemetry={telemetry}
-            deviceStatus={deviceStatus}
+            telemetry={effectiveTelemetry}
+            deviceStatus={{ pump: effectivePumpStatus }}
+            scenarioId={activeScenarioId}
+            onTogglePump={handleTogglePump}
           />
         )}
 
@@ -174,8 +220,9 @@ export default function App() {
 
         {activeTab === 'pump' && (
           <PumpControlView
-            deviceStatus={deviceStatus}
-            telemetry={telemetry}
+            deviceStatus={{ pump: effectivePumpStatus }}
+            telemetry={effectiveTelemetry}
+            onTogglePump={handleTogglePump}
           />
         )}
 
@@ -189,13 +236,22 @@ export default function App() {
       <footer style={{
         borderTop: '1px solid var(--border-subtle)',
         padding: '16px 24px',
-        color: 'var(--text-dim)',
-        fontSize: '0.75rem',
-        background: 'var(--bg-app)'
+        color: '#64748b',
+        fontSize: '0.8rem',
+        background: '#ffffff',
+        marginTop: 'auto'
       }}>
-        <div style={{ maxWidth: '1360px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>AquaSense Telemetry & Demand Forecasting</span>
-          <span className="mono">Unit aquasense_01</span>
+        <div style={{ maxWidth: '1360px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontWeight: 700, color: '#0f172a' }}>AquaSense Industrial Core</span>
+            <span>·</span>
+            <span>Real-time Telemetry & AI Capacity System</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <span className="mono" style={{ color: '#0284c7', fontWeight: 600 }}>Node aquasense_01</span>
+            <span>·</span>
+            <span style={{ color: '#059669', fontWeight: 600 }}>Firebase RTDB Sync</span>
+          </div>
         </div>
       </footer>
     </div>
