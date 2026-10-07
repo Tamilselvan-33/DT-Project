@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Header from './components/Header';
-import ScenarioDiagnosticBanner, { SCENARIO_PRESETS } from './components/ScenarioDiagnosticBanner';
+import IntelligentMenu, { MENU_ITEMS } from './components/IntelligentMenu';
+import LoadingScreen from './components/LoadingScreen';
 import LiveTelemetryView from './components/LiveTelemetryView';
 import HistoricalView from './components/HistoricalView';
 import PumpControlView from './components/PumpControlView';
 import PredictionView from './components/PredictionView';
+import DemoView from './components/DemoView';
+import { SCENARIO_PRESETS } from './components/ScenarioDiagnosticBanner';
 
 import {
   DEFAULT_DEVICE_ID,
@@ -20,11 +23,17 @@ import { checkBackendHealth } from './api/mlService';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('live');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [firebaseConnected, setFirebaseConnected] = useState(false);
   const [backendStatus, setBackendStatus] = useState(null);
 
-  // Active Scenario Mode ('live' or scenario preset id)
+  // Transition Loading Screen state
+  const [isLoadingTransition, setIsLoadingTransition] = useState(false);
+  const [destinationLabel, setDestinationLabel] = useState('');
+
+  // Active Scenario Mode ('live' by default, or set via Demo tab)
   const [activeScenarioId, setActiveScenarioId] = useState('live');
+  const [scenarioPumpOverride, setScenarioPumpOverride] = useState(null);
 
   // Telemetry & Device State directly backed by Firebase
   const [telemetry, setTelemetry] = useState(null);
@@ -32,9 +41,6 @@ export default function App() {
   const [readings, setReadings] = useState([]);
   const [historyLimit, setHistoryLimit] = useState(50);
   const [historyLoading, setHistoryLoading] = useState(false);
-
-  // Local scenario state override for pump toggle in simulation mode
-  const [scenarioPumpOverride, setScenarioPumpOverride] = useState(null);
 
   // Keep a ref to the latest telemetry for the 5-second interval archiver
   const latestTelemetryRef = useRef(null);
@@ -140,7 +146,28 @@ export default function App() {
     return () => clearInterval(interval);
   }, [pollBackend]);
 
-  // Derive Effective Telemetry based on active scenario mode
+  // Navigation Handler with Blue Brand Loading Screen
+  const handleNavigate = (targetTabId, label) => {
+    if (targetTabId === activeTab) {
+      setIsMenuOpen(false);
+      return;
+    }
+
+    setIsMenuOpen(false);
+    setDestinationLabel(label || targetTabId);
+    setIsLoadingTransition(true);
+
+    // Smooth transition delay to display the blue loading screen
+    setTimeout(() => {
+      setActiveTab(targetTabId);
+    }, 450);
+
+    setTimeout(() => {
+      setIsLoadingTransition(false);
+    }, 750);
+  };
+
+  // Derive Effective Telemetry based on active scenario mode (from Demo tab)
   const selectedPreset = SCENARIO_PRESETS.find((s) => s.id === activeScenarioId);
   const isSimulatedScenario = activeScenarioId !== 'live' && selectedPreset?.data;
 
@@ -165,22 +192,41 @@ export default function App() {
     }
   };
 
-  // When switching scenario presets, reset local pump override
-  const handleSelectScenario = (id) => {
-    setActiveScenarioId(id);
+  // Apply scenario handler (from DemoView)
+  const handleApplyScenario = (scenarioId) => {
+    setActiveScenarioId(scenarioId);
     setScenarioPumpOverride(null);
   };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-app)' }}>
+      {/* 1. Fullscreen Blue Transition Loading Screen */}
+      <LoadingScreen
+        isVisible={isLoadingTransition}
+        destinationLabel={destinationLabel}
+      />
+
+      {/* 2. Intelligent Sliding Menu Drawer */}
+      <IntelligentMenu
+        isOpen={isMenuOpen}
+        onClose={() => setIsMenuOpen(false)}
+        activeTab={activeTab}
+        onSelectTab={handleNavigate}
+        telemetry={effectiveTelemetry}
+        deviceStatus={{ pump: effectivePumpStatus }}
+        firebaseConnected={firebaseConnected}
+      />
+
+      {/* 3. Header with Intelligent Menu Launcher Button */}
       <Header
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        onOpenMenu={() => setIsMenuOpen(true)}
         firebaseConnected={firebaseConnected}
         espOnline={true}
         backendStatus={backendStatus}
       />
 
+      {/* 4. Active Destination View */}
       <main style={{
         flex: 1,
         maxWidth: '1360px',
@@ -191,19 +237,10 @@ export default function App() {
         flexDirection: 'column',
         gap: '20px'
       }}>
-        {/* Dynamic Scenario Diagnostic Banner & Selector (Always present on top of the workspace) */}
-        <ScenarioDiagnosticBanner
-          activeScenarioId={activeScenarioId}
-          onSelectScenario={handleSelectScenario}
-          effectiveTelemetry={effectiveTelemetry}
-          isPumpActive={effectivePumpStatus}
-        />
-
         {activeTab === 'live' && (
           <LiveTelemetryView
             telemetry={effectiveTelemetry}
             deviceStatus={{ pump: effectivePumpStatus }}
-            scenarioId={activeScenarioId}
             onTogglePump={handleTogglePump}
           />
         )}
@@ -231,8 +268,17 @@ export default function App() {
             backendStatus={backendStatus}
           />
         )}
+
+        {activeTab === 'demo' && (
+          <DemoView
+            selectedScenarioId={activeScenarioId}
+            onApplyScenario={handleApplyScenario}
+            isAppliedToWorkspace={activeScenarioId !== 'live'}
+          />
+        )}
       </main>
 
+      {/* 5. Minimalist Clean Footer */}
       <footer style={{
         borderTop: '1px solid var(--border-subtle)',
         padding: '16px 24px',
@@ -245,7 +291,7 @@ export default function App() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <span style={{ fontWeight: 700, color: '#0f172a' }}>AquaSense Industrial Core</span>
             <span>·</span>
-            <span>Real-time Telemetry & AI Capacity System</span>
+            <span>Precision Telemetry & Capacity AI</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <span className="mono" style={{ color: '#0284c7', fontWeight: 600 }}>Node aquasense_01</span>

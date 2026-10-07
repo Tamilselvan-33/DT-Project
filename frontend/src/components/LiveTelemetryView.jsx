@@ -5,13 +5,10 @@ import {
   Waves,
   Power,
   Activity,
-  CheckCircle2,
-  AlertTriangle,
   Zap,
   ArrowRight,
   ShieldCheck,
   ShieldAlert,
-  Flame,
   Droplet
 } from 'lucide-react';
 import {
@@ -28,7 +25,6 @@ import { sendPumpCommand, DEFAULT_DEVICE_ID } from '../firebase/database';
 export default function LiveTelemetryView({
   telemetry,
   deviceStatus,
-  scenarioId,
   onTogglePump
 }) {
   // Rolling live buffer for the real-time oscilloscope waveform
@@ -53,12 +49,12 @@ export default function LiveTelemetryView({
 
   if (!telemetry) {
     return (
-      <div className="card" style={{ padding: '60px', textAlign: 'center', maxWidth: '520px', margin: '40px auto' }}>
-        <Activity size={40} color="#0284c7" style={{ margin: '0 auto 16px' }} />
-        <h3 style={{ fontSize: '1.25rem', fontWeight: 800, marginBottom: '8px', color: '#0f172a' }}>
+      <div className="card" style={{ padding: '60px', textAlign: 'center', maxWidth: '480px', margin: '40px auto' }}>
+        <Activity size={36} color="#0284c7" style={{ margin: '0 auto 16px' }} />
+        <h3 style={{ fontSize: '1.2rem', fontWeight: 800, marginBottom: '6px', color: '#0f172a' }}>
           Connecting to Sensor Stream
         </h3>
-        <p style={{ color: '#64748b', fontSize: '0.9rem' }}>
+        <p style={{ color: '#64748b', fontSize: '0.88rem' }}>
           Listening for telemetry packets from ESP32 Firebase RTDB...
         </p>
       </div>
@@ -71,14 +67,6 @@ export default function LiveTelemetryView({
   const levelPercent = Math.min(100, Math.max(0, Math.round(((telemetry.water_level_raw || 0) / 4095) * 100)));
   const totalLiters = Number(telemetry.flow1_total_liters || 0);
 
-  // Dynamic scenarios calculations
-  const isDryRunRisk = levelPercent < 15 && isPumpActive;
-  const isOverflowRisk = levelPercent >= 88;
-  const estimatedPowerWatts = isPumpActive ? (750 + Math.random() * 20).toFixed(0) : 4;
-  const dynamicHydraulicEfficiency = isPumpActive && Number(telemetry.flow1_lpm || 0) > 0
-    ? Math.min(100, ((Number(telemetry.flow2_lpm || 0) / Number(telemetry.flow1_lpm || 1)) * 100)).toFixed(1)
-    : '100.0';
-
   const handleTogglePump = async () => {
     if (onTogglePump) {
       onTogglePump();
@@ -90,289 +78,168 @@ export default function LiveTelemetryView({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* Top Banner / System State Summary in Light Executive Style */}
-      <div className="card" style={{
-        padding: '16px 24px',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '16px',
-        background: '#ffffff',
-        border: '1px solid var(--border-subtle)'
+      {/* 1. Unified Fluid Horizon Metrics Panel (Eliminating blocky multi-card clutter) */}
+      <div className="horizon-panel" style={{
+        padding: '24px 28px',
+        background: '#ffffff'
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '28px', flexWrap: 'wrap' }}>
-          <div>
-            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
-              Monitoring Status
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
-              <span className={`status-dot ${hasLeak ? 'dot-red' : isDryRunRisk ? 'dot-amber' : 'dot-green'}`} />
-              <span style={{ fontWeight: 800, fontSize: '0.98rem', color: '#0f172a' }}>
-                {hasLeak ? 'Hydraulic Anomaly' : isDryRunRisk ? 'Dry-Run Warning' : 'Hydraulic Stream Active'}
+        {/* Top Horizon Header */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: '14px',
+          paddingBottom: '20px',
+          borderBottom: '1px solid #f1f5f9'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span className={`status-dot ${hasLeak ? 'dot-red' : 'dot-green'}`} />
+              <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0f172a' }}>
+                {hasLeak ? 'Differential Anomaly' : 'Real-Time Hydrology Active'}
               </span>
             </div>
+            <span style={{ color: '#cbd5e1' }}>•</span>
+            <span style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>
+              Node: <strong style={{ color: '#0f172a' }}>aquasense_01</strong>
+            </span>
+            <span style={{ color: '#cbd5e1' }}>•</span>
+            <span style={{ fontSize: '0.82rem', color: '#64748b', fontWeight: 600 }}>
+              Throughput: <strong className="mono" style={{ color: '#0284c7' }}>{totalLiters.toFixed(2)} L</strong>
+            </span>
           </div>
 
-          <div style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: '24px' }}>
-            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
-              Pump Actuator
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
-              <span style={{
-                fontSize: '0.9rem',
-                fontWeight: 800,
-                color: isPumpActive ? '#059669' : '#64748b'
-              }}>
-                {isPumpActive ? 'RUNNING (ACTIVE)' : 'STANDBY (IDLE)'}
-              </span>
-              <span className="mono" style={{ fontSize: '0.75rem', color: '#64748b', background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px' }}>
-                {estimatedPowerWatts}W
-              </span>
-            </div>
-          </div>
-
-          <div style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: '24px' }}>
-            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
-              System Throughput
-            </span>
-            <div className="mono" style={{ fontWeight: 800, fontSize: '1rem', marginTop: '3px', color: '#0284c7' }}>
-              {totalLiters.toFixed(2)} L
-            </div>
-          </div>
-
-          <div style={{ borderLeft: '1px solid var(--border-subtle)', paddingLeft: '24px' }}>
-            <span style={{ fontSize: '0.72rem', color: '#64748b', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>
-              Line Efficiency
-            </span>
-            <div className="mono" style={{
-              fontWeight: 800,
-              fontSize: '1rem',
-              marginTop: '3px',
-              color: Number(dynamicHydraulicEfficiency) > 90 ? '#059669' : '#e11d48'
-            }}>
-              {dynamicHydraulicEfficiency}%
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Direct Pump Action Toggle */}
-        <button
-          onClick={handleTogglePump}
-          className={`btn ${isPumpActive ? 'btn-danger' : 'btn-success'}`}
-          style={{
-            padding: '10px 22px',
-            fontSize: '0.92rem',
-            letterSpacing: '0.02em',
-            fontWeight: 700
-          }}
-        >
-          <Power size={16} />
-          <span>{isPumpActive ? 'Stop Pump' : 'Start Pump'}</span>
-        </button>
-      </div>
-
-      {/* 4 Core Stat KPI Cards */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-        gap: '16px'
-      }}>
-        {/* Sensor 1: Inlet */}
-        <div className="card" style={{
-          padding: '22px',
-          borderLeft: '4px solid #0284c7'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Inlet Flow (Sensor 1)
-            </span>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              background: '#e0f2fe',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <Gauge size={18} color="#0284c7" />
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
-            <span className="mono" style={{ fontSize: '2.5rem', fontWeight: 800, color: '#0284c7' }}>
-              {Number(telemetry.flow1_lpm || 0).toFixed(2)}
-            </span>
-            <span style={{ fontSize: '0.92rem', color: '#64748b', fontWeight: 600 }}>L/min</span>
-          </div>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            fontSize: '0.82rem',
-            color: '#64748b',
-            borderTop: '1px solid var(--border-subtle)',
-            paddingTop: '12px'
-          }}>
-            <span>Total: <strong className="mono" style={{ color: '#0f172a' }}>{Number(telemetry.flow1_total_liters || 0).toFixed(2)} L</strong></span>
-            <span>Pulses: <strong className="mono" style={{ color: '#334155' }}>{telemetry.flow1_total_pulses || 0}</strong></span>
-          </div>
-        </div>
-
-        {/* Sensor 2: Outlet */}
-        <div className="card" style={{
-          padding: '22px',
-          borderLeft: '4px solid #0891b2'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Outlet Flow (Sensor 2)
-            </span>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              background: '#cffafe',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <Gauge size={18} color="#0891b2" />
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
-            <span className="mono" style={{ fontSize: '2.5rem', fontWeight: 800, color: '#0891b2' }}>
-              {Number(telemetry.flow2_lpm || 0).toFixed(2)}
-            </span>
-            <span style={{ fontSize: '0.92rem', color: '#64748b', fontWeight: 600 }}>L/min</span>
-          </div>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            fontSize: '0.82rem',
-            color: '#64748b',
-            borderTop: '1px solid var(--border-subtle)',
-            paddingTop: '12px'
-          }}>
-            <span>Total: <strong className="mono" style={{ color: '#0f172a' }}>{Number(telemetry.flow2_total_liters || 0).toFixed(2)} L</strong></span>
-            <span>Pulses: <strong className="mono" style={{ color: '#334155' }}>{telemetry.flow2_total_pulses || 0}</strong></span>
-          </div>
-        </div>
-
-        {/* Flow Difference */}
-        <div className="card" style={{
-          padding: '22px',
-          borderLeft: `4px solid ${hasLeak ? '#e11d48' : '#059669'}`
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Flow Delta (Δ)
-            </span>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              background: hasLeak ? '#ffe4e6' : '#dcfce7',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <ArrowRightLeft size={18} color={hasLeak ? '#e11d48' : '#059669'} />
-            </div>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
-            <span className="mono" style={{
-              fontSize: '2.5rem',
-              fontWeight: 800,
-              color: hasLeak ? '#e11d48' : '#059669'
-            }}>
-              {Number(telemetry.flow_difference_l_min || 0).toFixed(2)}
-            </span>
-            <span style={{ fontSize: '0.92rem', color: '#64748b', fontWeight: 600 }}>L/min</span>
-          </div>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            fontSize: '0.82rem',
-            color: '#64748b',
-            borderTop: '1px solid var(--border-subtle)',
-            paddingTop: '12px'
-          }}>
-            <span>Variance: <strong className="mono" style={{ color: '#0f172a' }}>{Number(telemetry.flow_difference_percent || 0).toFixed(1)}%</strong></span>
-            <span style={{
-              padding: '2px 8px',
-              borderRadius: '4px',
+          {/* Quick Pump Toggle Button */}
+          <button
+            onClick={handleTogglePump}
+            className={`btn ${isPumpActive ? 'btn-danger' : 'btn-success'}`}
+            style={{
+              padding: '8px 20px',
+              fontSize: '0.88rem',
               fontWeight: 700,
-              fontSize: '0.72rem',
-              background: hasLeak ? '#ffe4e6' : '#dcfce7',
-              color: hasLeak ? '#e11d48' : '#059669'
-            }}>
-              {hasLeak ? 'Leak Alert' : 'Balanced Flow'}
-            </span>
-          </div>
+              borderRadius: '24px'
+            }}
+          >
+            <Power size={15} />
+            <span>{isPumpActive ? 'Stop Pump' : 'Start Pump'}</span>
+          </button>
         </div>
 
-        {/* Tank Water Level */}
-        <div className="card" style={{
-          padding: '22px',
-          borderLeft: '4px solid #7c3aed'
+        {/* Continuous Flow Metric Strip (No boxy borders) */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: '24px',
+          paddingTop: '20px'
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Tank Water Level
-            </span>
-            <div style={{
-              width: '36px',
-              height: '36px',
-              borderRadius: '8px',
-              background: '#ede9fe',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <Waves size={18} color="#7c3aed" />
+          {/* Inlet Flow */}
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase' }}>
+              <Gauge size={14} color="#0284c7" />
+              <span>Inlet Sensor 1</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '6px' }}>
+              <span className="mono" style={{ fontSize: '2.4rem', fontWeight: 800, color: '#0284c7', lineHeight: 1 }}>
+                {Number(telemetry.flow1_lpm || 0).toFixed(2)}
+              </span>
+              <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>L/min</span>
+            </div>
+            <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '6px' }}>
+              GPIO 26 · Total: {Number(telemetry.flow1_total_liters || 0).toFixed(1)} L
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginBottom: '16px' }}>
-            <span className="mono" style={{ fontSize: '2.5rem', fontWeight: 800, color: '#7c3aed' }}>
-              {levelPercent}%
-            </span>
-            <span className="mono" style={{ fontSize: '0.88rem', color: '#64748b' }}>
-              ({telemetry.water_level_raw || 0} / 4095)
-            </span>
+
+          {/* Outlet Flow */}
+          <div style={{ borderLeft: '1px solid #f1f5f9', paddingLeft: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase' }}>
+              <Gauge size={14} color="#0891b2" />
+              <span>Outlet Sensor 2</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '6px' }}>
+              <span className="mono" style={{ fontSize: '2.4rem', fontWeight: 800, color: '#0891b2', lineHeight: 1 }}>
+                {Number(telemetry.flow2_lpm || 0).toFixed(2)}
+              </span>
+              <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>L/min</span>
+            </div>
+            <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '6px' }}>
+              GPIO 27 · Total: {Number(telemetry.flow2_total_liters || 0).toFixed(1)} L
+            </div>
           </div>
-          <div style={{
-            width: '100%',
-            height: '8px',
-            borderRadius: '4px',
-            background: '#f1f5f9',
-            overflow: 'hidden'
-          }}>
+
+          {/* Flow Delta */}
+          <div style={{ borderLeft: '1px solid #f1f5f9', paddingLeft: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase' }}>
+              <ArrowRightLeft size={14} color={hasLeak ? '#e11d48' : '#059669'} />
+              <span>Flow Delta (Δ)</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '6px' }}>
+              <span className="mono" style={{ fontSize: '2.4rem', fontWeight: 800, color: hasLeak ? '#e11d48' : '#059669', lineHeight: 1 }}>
+                {diffLpm.toFixed(2)}
+              </span>
+              <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>L/min</span>
+            </div>
+            <div style={{ fontSize: '0.78rem', marginTop: '6px' }}>
+              <span style={{
+                color: hasLeak ? '#e11d48' : '#059669',
+                fontWeight: 700,
+                background: hasLeak ? '#fff1f2' : '#f0fdf4',
+                padding: '2px 8px',
+                borderRadius: '4px'
+              }}>
+                {hasLeak ? 'Leakage Detected' : 'Balanced Flow'}
+              </span>
+            </div>
+          </div>
+
+          {/* Reservoir Level */}
+          <div style={{ borderLeft: '1px solid #f1f5f9', paddingLeft: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase' }}>
+              <Waves size={14} color="#7c3aed" />
+              <span>Reservoir Tank</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px', marginTop: '6px' }}>
+              <span className="mono" style={{ fontSize: '2.4rem', fontWeight: 800, color: '#7c3aed', lineHeight: 1 }}>
+                {levelPercent}%
+              </span>
+              <span className="mono" style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                ({telemetry.water_level_raw || 0})
+              </span>
+            </div>
             <div style={{
-              width: `${levelPercent}%`,
-              height: '100%',
-              background: 'linear-gradient(90deg, #7c3aed 0%, #0284c7 100%)',
-              borderRadius: '4px',
-              transition: 'width 0.5s ease'
-            }} />
+              width: '100%',
+              height: '6px',
+              borderRadius: '3px',
+              background: '#f1f5f9',
+              overflow: 'hidden',
+              marginTop: '10px'
+            }}>
+              <div style={{
+                width: `${levelPercent}%`,
+                height: '100%',
+                background: 'linear-gradient(90deg, #7c3aed 0%, #0284c7 100%)',
+                borderRadius: '3px',
+                transition: 'width 0.4s ease'
+              }} />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Middle Section: Live Real-Time Flow Chart + Animated Tank Visualizer */}
+      {/* 2. Seamless Visualization Stage: Chart & Reservoir Visualizer */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1.8fr) minmax(320px, 1fr)',
+        gridTemplateColumns: 'minmax(0, 1.8fr) minmax(300px, 1fr)',
         gap: '20px',
         alignItems: 'stretch'
       }}>
-        {/* Left: Live Real-time Flow Waveform Chart */}
-        <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column' }}>
+        {/* Real-time Oscilloscope Stream */}
+        <div className="horizon-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Activity size={20} color="#0284c7" />
+              <Activity size={18} color="#0284c7" />
               <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-                Real-Time Flow Telemetry Stream
+                Flow Oscilloscope Waveform
               </h3>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '0.78rem' }}>
@@ -384,16 +251,6 @@ export default function LiveTelemetryView({
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#0891b2' }} />
                 Sensor 2 (Outlet)
               </span>
-              <span className="mono" style={{
-                padding: '2px 8px',
-                borderRadius: '4px',
-                background: '#e0f2fe',
-                color: '#0369a1',
-                fontWeight: 700,
-                fontSize: '0.72rem'
-              }}>
-                5s TICK
-              </span>
             </div>
           </div>
 
@@ -401,16 +258,16 @@ export default function LiveTelemetryView({
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={liveStreamHistory.length > 0 ? liveStreamHistory : [{ time: 'Now', flow1: 0, flow2: 0 }]} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="liveFlow1Light" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="liveFlow1Clean" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#0284c7" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="#0284c7" stopOpacity={0.0} />
                   </linearGradient>
-                  <linearGradient id="liveFlow2Light" x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient id="liveFlow2Clean" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#0891b2" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="#0891b2" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="time" stroke="#64748b" tick={{ fontSize: 10 }} />
                 <YAxis stroke="#64748b" tick={{ fontSize: 10 }} />
                 <Tooltip
@@ -420,37 +277,37 @@ export default function LiveTelemetryView({
                     border: '1px solid #cbd5e1',
                     borderRadius: '8px',
                     fontSize: '0.82rem',
-                    boxShadow: '0 4px 12px rgba(15, 23, 42, 0.1)',
+                    boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
                     color: '#0f172a'
                   }}
                 />
-                <Area type="monotone" dataKey="flow1" stroke="#0284c7" strokeWidth={2.5} fill="url(#liveFlow1Light)" isAnimationActive={false} />
-                <Area type="monotone" dataKey="flow2" stroke="#0891b2" strokeWidth={2.5} fill="url(#liveFlow2Light)" isAnimationActive={false} />
+                <Area type="monotone" dataKey="flow1" stroke="#0284c7" strokeWidth={2.5} fill="url(#liveFlow1Clean)" isAnimationActive={false} />
+                <Area type="monotone" dataKey="flow2" stroke="#0891b2" strokeWidth={2.5} fill="url(#liveFlow2Clean)" isAnimationActive={false} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Right: Visual Liquid Water Storage Tank in Light Style */}
-        <div className="card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+        {/* Fluid Glass Tank Visualizer */}
+        <div className="horizon-panel" style={{ padding: '24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
           <div style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Waves size={20} color="#0284c7" />
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>Reservoir Tank</h3>
+              <Waves size={18} color="#7c3aed" />
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>Water Storage</h3>
             </div>
             <span style={{
               fontSize: '0.75rem',
               fontWeight: 700,
               padding: '3px 10px',
               borderRadius: '12px',
-              background: levelPercent > 85 ? '#cffafe' : levelPercent > 20 ? '#dcfce7' : '#fee2e2',
-              color: levelPercent > 85 ? '#0891b2' : levelPercent > 20 ? '#059669' : '#e11d48'
+              background: levelPercent > 80 ? '#cffafe' : levelPercent > 20 ? '#dcfce7' : '#fee2e2',
+              color: levelPercent > 80 ? '#0891b2' : levelPercent > 20 ? '#059669' : '#e11d48'
             }}>
-              {levelPercent > 85 ? 'High Volume' : levelPercent > 25 ? 'Optimal Reserve' : 'Critical Low'}
+              {levelPercent > 80 ? 'Near Capacity' : levelPercent > 20 ? 'Optimal' : 'Low Reserve'}
             </span>
           </div>
 
-          {/* Visual Tank Graphic Container */}
+          {/* Visual Tank Glass Chamber */}
           <div style={{
             position: 'relative',
             width: '160px',
@@ -458,7 +315,7 @@ export default function LiveTelemetryView({
             borderRadius: '24px',
             background: 'linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%)',
             border: '2px solid #cbd5e1',
-            boxShadow: 'inset 0 0 15px rgba(0, 0, 0, 0.05), 0 4px 12px rgba(2, 132, 199, 0.1)',
+            boxShadow: 'inset 0 0 15px rgba(0, 0, 0, 0.04), 0 4px 14px rgba(2, 132, 199, 0.08)',
             overflow: 'hidden',
             display: 'flex',
             alignItems: 'center',
@@ -473,7 +330,7 @@ export default function LiveTelemetryView({
               <div className="tank-wave" />
             </div>
 
-            {/* Level Graduation Lines */}
+            {/* Graduation lines */}
             <div style={{ position: 'absolute', right: '10px', top: '25%', fontSize: '0.68rem', color: '#64748b', fontWeight: 700 }}>75%</div>
             <div style={{ position: 'absolute', right: '10px', top: '50%', fontSize: '0.68rem', color: '#64748b', fontWeight: 700 }}>50%</div>
             <div style={{ position: 'absolute', right: '10px', top: '75%', fontSize: '0.68rem', color: '#64748b', fontWeight: 700 }}>25%</div>
@@ -491,115 +348,92 @@ export default function LiveTelemetryView({
         </div>
       </div>
 
-      {/* Bottom Section: Hydraulic Pipeline Diagram & Active Topology in Light Style */}
-      <div className="card" style={{ padding: '24px' }}>
+      {/* 3. Fluid Physical Pipeline Flow Schematic (Connected line, no clunky boxes) */}
+      <div className="horizon-panel" style={{ padding: '24px 28px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <Zap size={20} color="#0284c7" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Zap size={18} color="#0284c7" />
             <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0f172a' }}>
-              Physical Hydraulic Flow Schematic
+              Hydraulic Physical Topology
             </h3>
           </div>
           <span style={{ fontSize: '0.78rem', color: '#64748b', fontWeight: 500 }}>
-            Physical GPIO: S1 (GPIO 26) · S2 (GPIO 27) · Level (GPIO 34) · Relay (GPIO 25)
+            Physical GPIO Pinout: S1 (GPIO 26) · S2 (GPIO 27) · Level (GPIO 34) · Relay (GPIO 25)
           </span>
         </div>
 
-        {/* Pipeline Nodes Row */}
+        {/* Fluid Connected Flow Schematic */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
           gap: '16px',
           alignItems: 'center'
         }}>
-          {/* Node 1: Inlet Sensor */}
+          {/* Node 1: S1 */}
           <div style={{
-            background: '#f8fafc',
-            padding: '16px',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid #e0f2fe',
-            boxShadow: 'var(--shadow-sm)',
-            textAlign: 'center'
+            background: 'linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)',
+            padding: '16px 20px',
+            borderRadius: '14px',
+            border: '1px solid #e0f2fe'
           }}>
-            <div style={{ fontSize: '0.72rem', color: '#0284c7', fontWeight: 800, textTransform: 'uppercase' }}>
-              Inlet Intake
-            </div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>
-              Sensor 1 (GPIO 26)
-            </div>
-            <div className="mono" style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0284c7', marginTop: '4px' }}>
+            <span style={{ fontSize: '0.7rem', color: '#0284c7', fontWeight: 800, textTransform: 'uppercase' }}>
+              Inlet Intake (GPIO 26)
+            </span>
+            <div className="mono" style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0284c7', marginTop: '4px' }}>
               {Number(telemetry.flow1_lpm || 0).toFixed(2)} L/min
             </div>
           </div>
 
-          {/* Node 2: Centrifugal Pump */}
+          {/* Node 2: Pump */}
           <div style={{
-            background: '#f8fafc',
-            padding: '16px',
-            borderRadius: 'var(--radius-sm)',
-            border: isPumpActive ? '1px solid #bbf7d0' : '1px solid var(--border-subtle)',
-            boxShadow: 'var(--shadow-sm)',
-            textAlign: 'center'
+            background: isPumpActive ? 'linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%)' : '#f8fafc',
+            padding: '16px 20px',
+            borderRadius: '14px',
+            border: `1px solid ${isPumpActive ? '#86efac' : '#e2e8f0'}`
           }}>
-            <div style={{ fontSize: '0.72rem', color: isPumpActive ? '#059669' : '#64748b', fontWeight: 800, textTransform: 'uppercase' }}>
-              Relay Actuator
-            </div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>
-              Submersible Pump (GPIO 25)
-            </div>
+            <span style={{ fontSize: '0.7rem', color: isPumpActive ? '#15803d' : '#64748b', fontWeight: 800, textTransform: 'uppercase' }}>
+              Pump Relay (GPIO 25)
+            </span>
             <div style={{
-              display: 'inline-flex',
+              display: 'flex',
               alignItems: 'center',
               gap: '6px',
               marginTop: '6px',
-              padding: '4px 12px',
-              borderRadius: '6px',
-              background: isPumpActive ? '#dcfce7' : '#f1f5f9',
-              color: isPumpActive ? '#059669' : '#64748b',
-              fontWeight: 700,
-              fontSize: '0.85rem'
+              fontWeight: 800,
+              fontSize: '0.95rem',
+              color: isPumpActive ? '#15803d' : '#64748b'
             }}>
-              <Power size={13} />
+              <Power size={14} />
               <span>{isPumpActive ? 'POWERED ON' : 'STOPPED'}</span>
             </div>
           </div>
 
-          {/* Node 3: Storage Reservoir */}
+          {/* Node 3: Tank */}
           <div style={{
-            background: '#f8fafc',
-            padding: '16px',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid #ede9fe',
-            boxShadow: 'var(--shadow-sm)',
-            textAlign: 'center'
+            background: 'linear-gradient(135deg, #f8fafc 0%, #faf5ff 100%)',
+            padding: '16px 20px',
+            borderRadius: '14px',
+            border: '1px solid #f3e8ff'
           }}>
-            <div style={{ fontSize: '0.72rem', color: '#7c3aed', fontWeight: 800, textTransform: 'uppercase' }}>
-              Storage Tank
-            </div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>
-              Level Sensor (GPIO 34)
-            </div>
-            <div className="mono" style={{ fontSize: '1.3rem', fontWeight: 800, color: '#7c3aed', marginTop: '4px' }}>
-              {levelPercent}% Capacity
+            <span style={{ fontSize: '0.7rem', color: '#7c3aed', fontWeight: 800, textTransform: 'uppercase' }}>
+              Reservoir (GPIO 34)
+            </span>
+            <div className="mono" style={{ fontSize: '1.4rem', fontWeight: 800, color: '#7c3aed', marginTop: '4px' }}>
+              {levelPercent}% Reserve
             </div>
           </div>
 
-          {/* Node 4: Outlet Sensor */}
+          {/* Node 4: S2 */}
           <div style={{
-            background: '#f8fafc',
-            padding: '16px',
-            borderRadius: 'var(--radius-sm)',
-            border: '1px solid #cffafe',
-            boxShadow: 'var(--shadow-sm)',
-            textAlign: 'center'
+            background: 'linear-gradient(135deg, #f8fafc 0%, #ecfeff 100%)',
+            padding: '16px 20px',
+            borderRadius: '14px',
+            border: '1px solid #cffafe'
           }}>
-            <div style={{ fontSize: '0.72rem', color: '#0891b2', fontWeight: 800, textTransform: 'uppercase' }}>
-              Discharge Outlet
-            </div>
-            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', marginTop: '4px' }}>
-              Sensor 2 (GPIO 27)
-            </div>
-            <div className="mono" style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0891b2', marginTop: '4px' }}>
+            <span style={{ fontSize: '0.7rem', color: '#0891b2', fontWeight: 800, textTransform: 'uppercase' }}>
+              Discharge (GPIO 27)
+            </span>
+            <div className="mono" style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0891b2', marginTop: '4px' }}>
               {Number(telemetry.flow2_lpm || 0).toFixed(2)} L/min
             </div>
           </div>
