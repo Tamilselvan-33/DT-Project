@@ -17,7 +17,7 @@ import { sendPumpCommand, DEFAULT_DEVICE_ID } from '../firebase/database';
 export default function PumpControlView({
   deviceStatus,
   telemetry,
-  onTogglePump
+  onSendCommand
 }) {
   const [isSending, setIsSending] = useState(false);
   const [lastAction, setLastAction] = useState(null);
@@ -45,30 +45,17 @@ export default function PumpControlView({
     return () => clearInterval(timer);
   }, [isPumpActive]);
 
+  // Direct explicit command execution: 'ON' turns pump ON, 'OFF' turns pump OFF
   const handleCommand = async (action) => {
-    // If in auto-pilot and dry-run hazard, warn user
-    if (action === 'ON' && isDryRunHazard) {
-      const confirmOverride = window.confirm(
-        'Warning: Reservoir level is below 15% (Dry-Run Hazard). Starting pump without water can damage the stator. Proceed anyway?'
-      );
-      if (!confirmOverride) return;
-    }
-
-    if (onTogglePump) {
-      onTogglePump();
-      setLastAction({
-        command: action,
-        time: new Date().toLocaleTimeString(),
-        success: true
-      });
-      return;
-    }
-
     setIsSending(true);
     const sentTime = new Date().toLocaleTimeString();
 
     try {
-      await sendPumpCommand(DEFAULT_DEVICE_ID, action);
+      if (onSendCommand) {
+        await onSendCommand(action);
+      } else {
+        await sendPumpCommand(DEFAULT_DEVICE_ID, action);
+      }
       setLastAction({
         command: action,
         time: sentTime,
@@ -108,7 +95,7 @@ export default function PumpControlView({
               </span>
             </div>
             <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 500 }}>
-              Industrial AC Submersible Pump Controller & Safety Interlock
+              Industrial AC Submersible Pump Controller & Relay Switch
             </span>
           </div>
 
@@ -133,7 +120,7 @@ export default function PumpControlView({
           </div>
         </div>
 
-        {/* Dynamic Scenario Alert for Pump State */}
+        {/* Informative Warning without blocking user actions */}
         {isDryRunHazard && (
           <div style={{
             marginBottom: '20px',
@@ -148,10 +135,10 @@ export default function PumpControlView({
             <AlertTriangle size={20} color="#d97706" />
             <div>
               <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#92400e' }}>
-                Dry-Run Protection Warning (Water Level: {levelPercent}%)
+                Dry-Run Protection Advisory (Water Level: {levelPercent}%)
               </div>
               <div style={{ fontSize: '0.8rem', color: '#b45309', marginTop: '2px' }}>
-                Water level is critically low. Prevent unattended pump activation to protect mechanical seals.
+                Water level reads low. You can still operate the pump freely as requested.
               </div>
             </div>
           </div>
@@ -174,7 +161,7 @@ export default function PumpControlView({
                 Reservoir Full Threshold ({levelPercent}%)
               </div>
               <div style={{ fontSize: '0.8rem', color: '#0f766e', marginTop: '2px' }}>
-                Storage capacity near maximum. Pump shutoff recommended to conserve electrical energy.
+                Storage capacity near maximum. Pump shutoff recommended to conserve energy.
               </div>
             </div>
           </div>
@@ -223,7 +210,7 @@ export default function PumpControlView({
               Last Command
             </span>
             <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#0f172a', marginTop: '6px' }}>
-              {lastAction ? `${lastAction.command} (${lastAction.time})` : 'System Boot'}
+              {lastAction ? `${lastAction.command} (${lastAction.time})` : 'System Standby'}
             </div>
           </div>
         </div>
@@ -246,7 +233,7 @@ export default function PumpControlView({
                 Smart Auto-Pilot Level Guard
               </div>
               <div style={{ fontSize: '0.78rem', color: '#64748b' }}>
-                Automatically prevents pump dry-run (&lt;15%) and overflow shutoff (&gt;88%)
+                Monitors water level and provides safety telemetry
               </div>
             </div>
           </div>
@@ -269,24 +256,27 @@ export default function PumpControlView({
           </button>
         </div>
 
-        {/* Large Ergonomic Control Buttons in Light Style */}
+        {/* Direct Action Control Buttons: Start sends ON, Stop sends OFF */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <button
+            id="start-pump-button"
             onClick={() => handleCommand('ON')}
-            disabled={isSending || (isAutoPilot && isDryRunHazard)}
+            disabled={isSending}
             className="btn btn-success"
             style={{
               padding: '18px',
               fontSize: '1.05rem',
               fontWeight: 800,
-              boxShadow: '0 4px 14px rgba(5, 150, 105, 0.25)'
+              boxShadow: isPumpActive ? '0 0 0 3px rgba(5, 150, 105, 0.4)' : '0 4px 14px rgba(5, 150, 105, 0.25)',
+              transform: isPumpActive ? 'scale(1.01)' : 'none'
             }}
           >
             <Power size={20} />
-            <span>{isSending ? 'Sending...' : 'Start Pump Relay'}</span>
+            <span>{isSending ? 'Sending ON...' : isPumpActive ? 'Pump is Running (ON)' : 'Start Pump Relay'}</span>
           </button>
 
           <button
+            id="stop-pump-button"
             onClick={() => handleCommand('OFF')}
             disabled={isSending}
             className="btn btn-danger"
@@ -294,11 +284,12 @@ export default function PumpControlView({
               padding: '18px',
               fontSize: '1.05rem',
               fontWeight: 800,
-              boxShadow: '0 4px 14px rgba(225, 29, 72, 0.25)'
+              boxShadow: !isPumpActive ? '0 0 0 3px rgba(225, 29, 72, 0.3)' : '0 4px 14px rgba(225, 29, 72, 0.25)',
+              opacity: !isPumpActive ? 0.85 : 1
             }}
           >
             <Power size={20} />
-            <span>{isSending ? 'Sending...' : 'Stop Pump Relay'}</span>
+            <span>{isSending ? 'Sending OFF...' : !isPumpActive ? 'Pump is Stopped (OFF)' : 'Stop Pump Relay'}</span>
           </button>
         </div>
       </div>

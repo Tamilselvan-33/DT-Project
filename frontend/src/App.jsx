@@ -182,14 +182,20 @@ export default function App() {
     ? (scenarioPumpOverride !== null ? scenarioPumpOverride : selectedPreset.data.pump_status)
     : Boolean(deviceStatus?.pump ?? telemetry?.pump_status);
 
-  // Toggle pump handler
-  const handleTogglePump = async () => {
+  // Explicit pump command handler ('ON' or 'OFF')
+  const handleSendPumpCommand = async (command) => {
+    const isTargetOn = String(command).toUpperCase() === 'ON';
     if (isSimulatedScenario) {
-      setScenarioPumpOverride(!effectivePumpStatus);
+      setScenarioPumpOverride(isTargetOn);
     } else {
-      const nextState = !effectivePumpStatus;
-      await sendPumpCommand(DEFAULT_DEVICE_ID, nextState ? 'ON' : 'OFF');
+      await sendPumpCommand(DEFAULT_DEVICE_ID, isTargetOn ? 'ON' : 'OFF');
     }
+  };
+
+  // Toggle pump handler (used by single-button toggle in Live Dashboard)
+  const handleTogglePump = async () => {
+    const nextCommand = effectivePumpStatus ? 'OFF' : 'ON';
+    await handleSendPumpCommand(nextCommand);
   };
 
   // Apply scenario handler (from DemoView)
@@ -259,7 +265,7 @@ export default function App() {
           <PumpControlView
             deviceStatus={{ pump: effectivePumpStatus }}
             telemetry={effectiveTelemetry}
-            onTogglePump={handleTogglePump}
+            onSendCommand={handleSendPumpCommand}
           />
         )}
 
