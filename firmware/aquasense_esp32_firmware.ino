@@ -126,6 +126,7 @@ FirebaseConfig config;
 // ============================================================
 
 bool pumpState = false;
+volatile bool pendingPumpUpdate = false;
 
 // ============================================================
 // Firebase Paths
@@ -182,7 +183,7 @@ void IRAM_ATTR flow2ISR()
 }
 
 // ============================================================
-// Pump Control
+// Pump Control (Directly switches relay; flags loop for cloud sync)
 // ============================================================
 
 void setPump(bool state)
@@ -205,27 +206,8 @@ void setPump(bool state)
   Serial.println(pumpState ? "ON" : "OFF");
   Serial.println("======================================");
 
-  // Report pump state to Firebase immediately
-  if (Firebase.ready())
-  {
-    String pumpStatusPath = statusPath + "/pump";
-    if (!Firebase.RTDB.setBool(&fbdo, pumpStatusPath.c_str(), pumpState))
-    {
-      Serial.print("Firebase pump status FAILED: ");
-      Serial.println(fbdo.errorReason());
-    }
-    else
-    {
-      Serial.println("Firebase pump status updated.");
-    }
-
-    String livePumpPath = livePath + "/pump_status";
-    if (!Firebase.RTDB.setBool(&fbdo, livePumpPath.c_str(), pumpState))
-    {
-      Serial.print("Firebase live pump update FAILED: ");
-      Serial.println(fbdo.errorReason());
-    }
-  }
+  // Mark for safe update in loop() to avoid SSL context collision in streamCallback
+  pendingPumpUpdate = true;
 }
 
 // ============================================================
@@ -760,6 +742,19 @@ void loop()
   {
     uploadHourlyData();
     lastHourlyUpload = millis();
+  }
+
+  // Safe Firebase Pump Status Update (outside streamCallback to avoid SSL collision)
+  if (pendingPumpUpdate && Firebase.ready())
+  {
+    pendingPumpUpdate = false;
+    String pumpStatusPath = statusPath + "/pump";
+    if (Firebase.RTDB.setBool(&fbdo, pumpStatusPath.c_str(), pumpState))
+    {
+      Serial.println("Firebase pump status updated successfully.");
+    }
+    String livePumpPath = livePath + "/pump_status";
+    Firebase.RTDB.setBool(&fbdo, livePumpPath.c_str(), pumpState);
   }
 
   delay(10);
