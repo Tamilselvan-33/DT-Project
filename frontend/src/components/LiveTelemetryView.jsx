@@ -67,13 +67,22 @@ export default function LiveTelemetryView({
   const levelPercent = Math.min(100, Math.max(0, Math.round(((telemetry.water_level_raw || 0) / 4095) * 100)));
   const totalLiters = Number(telemetry.flow1_total_liters || 0);
 
+  const [isSending, setIsSending] = useState(false);
+
   const handleTogglePump = async () => {
-    if (onTogglePump) {
-      onTogglePump();
-      return;
+    setIsSending(true);
+    try {
+      if (onTogglePump) {
+        await onTogglePump();
+      } else {
+        const nextState = !isPumpActive;
+        await sendPumpCommand(DEFAULT_DEVICE_ID, nextState ? 'ON' : 'OFF');
+      }
+    } catch (err) {
+      console.error('[LiveTelemetryView] Toggle pump error:', err);
+    } finally {
+      setTimeout(() => setIsSending(false), 800);
     }
-    const nextState = !isPumpActive;
-    await sendPumpCommand(DEFAULT_DEVICE_ID, nextState ? 'ON' : 'OFF');
   };
 
   return (
@@ -113,16 +122,18 @@ export default function LiveTelemetryView({
           {/* Quick Pump Toggle Button */}
           <button
             onClick={handleTogglePump}
+            disabled={isSending}
             className={`btn ${isPumpActive ? 'btn-danger' : 'btn-success'}`}
             style={{
               padding: '8px 20px',
               fontSize: '0.88rem',
               fontWeight: 700,
-              borderRadius: '24px'
+              borderRadius: '24px',
+              opacity: isSending ? 0.75 : 1
             }}
           >
             <Power size={15} />
-            <span>{isPumpActive ? 'Stop Pump' : 'Start Pump'}</span>
+            <span>{isSending ? (isPumpActive ? 'Stopping...' : 'Starting...') : (isPumpActive ? 'Stop Pump' : 'Start Pump')}</span>
           </button>
         </div>
 

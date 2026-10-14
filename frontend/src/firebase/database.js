@@ -316,17 +316,27 @@ export const sendPumpCommand = async (
     throw new Error(`Invalid pump command: "${commandState}". Must be "ON" or "OFF".`);
   }
 
-  // 1. Write plain string "ON" or "OFF" to /devices/{deviceId}/command
+  // 1. Write plain string "ON" or "OFF" to /devices/{deviceId}/command (Primary ESP32 stream path)
   const commandRef = ref(database, `devices/${deviceId}/command`);
   await set(commandRef, validCmd);
 
-  // 2. Also write to alias /devices/aquasense/command if deviceId is aquasense_01
+  // 2. Mirror write to /commands/{deviceId} and /commands/command for easy visibility in Firebase Console
+  try {
+    const rootCommandsRef = ref(database, `commands/${deviceId}`);
+    await set(rootCommandsRef, validCmd);
+    const rootSimpleCmdRef = ref(database, `commands/command`);
+    await set(rootSimpleCmdRef, validCmd);
+  } catch (_) {}
+
+  // 3. Also write to alias /devices/aquasense/command if deviceId is aquasense_01
   if (deviceId === 'aquasense_01') {
     try {
       const aliasRef = ref(database, `devices/aquasense/command`);
       await set(aliasRef, validCmd);
     } catch (_) {}
   }
+
+  console.info(`[Firebase] Dispatched pump command "${validCmd}" to /devices/${deviceId}/command and /commands`);
 
   return {
     success: true,
