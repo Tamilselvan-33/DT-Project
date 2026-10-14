@@ -33,20 +33,40 @@ export const subscribeToLiveTelemetry = (
   callback,
   onError
 ) => {
-  ensureAuthenticated().catch(() => {});
-  const liveRef = ref(database, `devices/${deviceId}/live`);
-  
-  return onValue(liveRef, (snapshot) => {
-    if (snapshot.exists()) {
-      const data = snapshot.val();
-      callback(data);
-    } else {
-      callback(null);
-    }
-  }, (error) => {
-    console.error(`[Firebase] Error subscribing to live telemetry for ${deviceId}:`, error);
-    if (onError) onError(error);
-  });
+  let unsubscribeOnValue = null;
+  let isCancelled = false;
+
+  ensureAuthenticated()
+    .then(() => {
+      if (isCancelled) return;
+      const liveRef = ref(database, `devices/${deviceId}/live`);
+      unsubscribeOnValue = onValue(liveRef, (snapshot) => {
+        if (snapshot.exists()) {
+          callback(snapshot.val());
+        } else {
+          callback(null);
+        }
+      }, (error) => {
+        console.error(`[Firebase] Error subscribing to live telemetry for ${deviceId}:`, error);
+        if (onError) onError(error);
+      });
+    })
+    .catch((err) => {
+      console.error(`[Firebase] Auth error before subscribing to live telemetry:`, err);
+      if (!isCancelled) {
+        const liveRef = ref(database, `devices/${deviceId}/live`);
+        unsubscribeOnValue = onValue(liveRef, (snapshot) => {
+          callback(snapshot.exists() ? snapshot.val() : null);
+        }, (error) => {
+          if (onError) onError(error);
+        });
+      }
+    });
+
+  return () => {
+    isCancelled = true;
+    if (unsubscribeOnValue) unsubscribeOnValue();
+  };
 };
 
 /**
@@ -108,31 +128,63 @@ export const subscribeToHistoricalReadings = (
   onError,
   limitCount = 100
 ) => {
-  ensureAuthenticated().catch(() => {});
-  const readingsRef = ref(database, `readings/${deviceId}`);
-  const q = limitCount ? query(readingsRef, limitToLast(limitCount)) : readingsRef;
+  let unsubscribeOnValue = null;
+  let isCancelled = false;
 
-  return onValue(q, (snapshot) => {
-    if (snapshot.exists()) {
-      const val = snapshot.val();
-      const readings = [];
-      Object.entries(val).forEach(([key, record]) => {
-        const item = normalizeReading(key, record);
-        if (item) readings.push(item);
+  ensureAuthenticated()
+    .then(() => {
+      if (isCancelled) return;
+      const readingsRef = ref(database, `readings/${deviceId}`);
+      const q = limitCount ? query(readingsRef, limitToLast(limitCount)) : readingsRef;
+      unsubscribeOnValue = onValue(q, (snapshot) => {
+        if (snapshot.exists()) {
+          const val = snapshot.val();
+          const readings = [];
+          Object.entries(val).forEach(([key, record]) => {
+            const item = normalizeReading(key, record);
+            if (item) readings.push(item);
+          });
+          readings.sort((a, b) => {
+            const tA = a.date ? a.date.getTime() : 0;
+            const tB = b.date ? b.date.getTime() : 0;
+            return tA - tB;
+          });
+          callback(readings);
+        } else {
+          callback([]);
+        }
+      }, (error) => {
+        console.error(`[Firebase] Error subscribing to historical readings for ${deviceId}:`, error);
+        if (onError) onError(error);
       });
-      readings.sort((a, b) => {
-        const tA = a.date ? a.date.getTime() : 0;
-        const tB = b.date ? b.date.getTime() : 0;
-        return tA - tB;
-      });
-      callback(readings);
-    } else {
-      callback([]);
-    }
-  }, (error) => {
-    console.error(`[Firebase] Error subscribing to historical readings for ${deviceId}:`, error);
-    if (onError) onError(error);
-  });
+    })
+    .catch((err) => {
+      console.error(`[Firebase] Auth error before subscribing to historical readings:`, err);
+      if (!isCancelled) {
+        const readingsRef = ref(database, `readings/${deviceId}`);
+        const q = limitCount ? query(readingsRef, limitToLast(limitCount)) : readingsRef;
+        unsubscribeOnValue = onValue(q, (snapshot) => {
+          if (snapshot.exists()) {
+            const val = snapshot.val();
+            const readings = [];
+            Object.entries(val).forEach(([key, record]) => {
+              const item = normalizeReading(key, record);
+              if (item) readings.push(item);
+            });
+            callback(readings);
+          } else {
+            callback([]);
+          }
+        }, (error) => {
+          if (onError) onError(error);
+        });
+      }
+    });
+
+  return () => {
+    isCancelled = true;
+    if (unsubscribeOnValue) unsubscribeOnValue();
+  };
 };
 
 /**
@@ -208,19 +260,40 @@ export const subscribeToPumpStatus = (
   callback,
   onError
 ) => {
-  ensureAuthenticated().catch(() => {});
-  const statusRef = ref(database, `devices/${deviceId}/status`);
-  
-  return onValue(statusRef, (snapshot) => {
-    if (snapshot.exists()) {
-      callback(snapshot.val());
-    } else {
-      callback(null);
-    }
-  }, (error) => {
-    console.error(`[Firebase] Error subscribing to pump status for ${deviceId}:`, error);
-    if (onError) onError(error);
-  });
+  let unsubscribeOnValue = null;
+  let isCancelled = false;
+
+  ensureAuthenticated()
+    .then(() => {
+      if (isCancelled) return;
+      const statusRef = ref(database, `devices/${deviceId}/status`);
+      unsubscribeOnValue = onValue(statusRef, (snapshot) => {
+        if (snapshot.exists()) {
+          callback(snapshot.val());
+        } else {
+          callback(null);
+        }
+      }, (error) => {
+        console.error(`[Firebase] Error subscribing to pump status for ${deviceId}:`, error);
+        if (onError) onError(error);
+      });
+    })
+    .catch((err) => {
+      console.error(`[Firebase] Auth error before subscribing to pump status:`, err);
+      if (!isCancelled) {
+        const statusRef = ref(database, `devices/${deviceId}/status`);
+        unsubscribeOnValue = onValue(statusRef, (snapshot) => {
+          callback(snapshot.exists() ? snapshot.val() : null);
+        }, (error) => {
+          if (onError) onError(error);
+        });
+      }
+    });
+
+  return () => {
+    isCancelled = true;
+    if (unsubscribeOnValue) unsubscribeOnValue();
+  };
 };
 
 /**
