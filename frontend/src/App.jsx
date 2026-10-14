@@ -70,24 +70,6 @@ export default function App() {
     return () => unsubscribeLive();
   }, []);
 
-  // 3. Periodic 5-Second Telemetry Archiver to Firebase
-  useEffect(() => {
-    const archiveTimer = setInterval(() => {
-      const current = latestTelemetryRef.current;
-      if (current) {
-        recordTelemetryReading(DEFAULT_DEVICE_ID, current)
-          .then(() => {
-            console.debug('[Firebase] 5s Telemetry snapshot saved to /readings/aquasense_01');
-          })
-          .catch((err) => {
-            console.error('[Firebase] Failed to save 5s reading snapshot:', err);
-          });
-      }
-    }, 5000);
-
-    return () => clearInterval(archiveTimer);
-  }, []);
-
   // 4. Subscribe to Device Status (/devices/aquasense_01/status)
   useEffect(() => {
     const unsubscribeStatus = subscribeToPumpStatus(
