@@ -29,6 +29,7 @@ export default function LiveTelemetryView({
 }) {
   // Rolling live buffer for the real-time oscilloscope waveform
   const [liveStreamHistory, setLiveStreamHistory] = useState([]);
+  const [isSending, setIsSending] = useState(false);
 
   useEffect(() => {
     if (!telemetry) return;
@@ -66,8 +67,6 @@ export default function LiveTelemetryView({
   const hasLeak = diffLpm > 2.0 && Number(telemetry.flow1_lpm || 0) > 1.0;
   const levelPercent = Math.min(100, Math.max(0, Math.round(((telemetry.water_level_raw || 0) / 4095) * 100)));
   const totalLiters = Number(telemetry.flow1_total_liters || 0);
-
-  const [isSending, setIsSending] = useState(false);
 
   const handleTogglePump = async () => {
     setIsSending(true);
