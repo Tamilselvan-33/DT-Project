@@ -152,7 +152,7 @@ app.add_middleware(
 class PredictionRequest(BaseModel):
     student_population: int = Field(..., ge=1, le=100000, description="Number of students on campus")
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 def read_root():
     return {
         "service": "AquaSense ML Prediction Backend",
@@ -160,7 +160,7 @@ def read_root():
         "model_loaded": model_manager.is_ready()
     }
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health_check():
     return {
         "status": "healthy",
